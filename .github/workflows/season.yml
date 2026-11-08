@@ -1,0 +1,136 @@
+name: season
+
+# Play an evening of tennis from a form, and keep the season in the record.
+#
+# The founder's outline ends with an activity rather than a test: invite the members to play a season and
+# start practising. This is that, for a person with no terminal — the same engine `lab/tennis.py`, run on a
+# runner, writing into `games/tennis/seasons/<season>/`.
+#
+# What it will and will not promise: the balls are counted by the engine, the season file keeps every session,
+# and the report refuses to say the game improved until a session is big enough to mean anything. Play a few
+# evenings and the sentence appears on its own, with the sessions it was computed over.
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "the season's folder name — reuse it every evening to keep the record going"
+        required: true
+        default: "2026-spring"
+      players:
+        description: "two members, comma-separated — leave blank for the first two on the shelf"
+        required: false
+        default: ""
+      rallies:
+        description: "how many rallies tonight"
+        required: true
+        default: "8"
+      surface:
+        description: "which court"
+        type: choice
+        options:
+          - auto
+          - clay
+          - hard
+          - grass
+        default: "auto"
+      temperature:
+        description: "how much the hands vary; 1.0 is the usual"
+        required: false
+        default: "1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: season
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Which season, which two
+        env:
+          SEASON: ${{ inputs.season }}
+          PLAYERS: ${{ inputs.players }}
+        run: |
+          set -euo pipefail
+          # A season name becomes a directory, so it is checked here rather than trusted.
+          case "$SEASON" in
+            *[!A-Za-z0-9._-]*) echo "::error::season names are one word: letters, digits, dot, dash"; exit 2 ;;
+          esac
+          who="${PLAYERS:-}"
+          if [ -z "$who" ]; then
+            # The shelf, minus the test members the bench keeps, in the same order lab/members.py publishes.
+            who="$(ls -1 wake/members | while read -r m; do
+                     grep -qx "$m" lab/fixtures.txt 2>/dev/null || echo "$m"; done | head -2 | paste -sd, -)"
+            echo "no players named, so the first two on the shelf play: $who"
+          fi
+          n="$(printf '%s' "$who" | awk -F, '{print NF}')"
+          if [ "$n" -ne 2 ]; then echo "::error::two members, comma-separated — got '$who'"; exit 2; fi
+          for p in $(printf '%s' "$who" | tr ',' ' '); do
+            [ -d "wake/members/$p/state" ] || { echo "::error::no such member: $p"; exit 2; }
+          done
+          echo "PLAYERS=$who" >> "$GITHUB_ENV"
+
+      - name: Play
+        env:
+          SEASON: ${{ inputs.season }}
+          SURFACE: ${{ inputs.surface }}
+          RALLIES: ${{ inputs.rallies }}
+          TEMPERATURE: ${{ inputs.temperature }}
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+        run: |
+          set -euo pipefail
+          args=(--rally --season "$SEASON" --names "$PLAYERS" --rallies "$RALLIES" --temperature "$TEMPERATURE")
+          [ "$SURFACE" != "auto" ] && [ -n "$SURFACE" ] && args+=(--surface "$SURFACE")
+          true
+          # No vendor flag and no practice flag: each member's engine is in its own voice.md, and the count of
+          # balls it has already hit is in the season file. One source for each, and neither is a form field.
+          python3 lab/tennis.py "${args[@]}" | tee /tmp/session.txt
+
+      - name: What the season says now
+        if: always()
+        env:
+          SEASON: ${{ inputs.season }}
+        run: |
+          set -euo pipefail
+          python3 lab/tennis.py --report "$SEASON" | tee /tmp/report.txt || true
+          {
+            echo "## ${SEASON} — after tonight"
+            echo
+            cat /tmp/report.txt 2>/dev/null || echo "(no report)"
+            echo
+            echo "<details><summary>the session itself</summary>"
+            echo
+            echo '```'
+            tail -40 /tmp/session.txt 2>/dev/null || echo "(nothing was played)"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the session in the record
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "season: a session in ${{ inputs.season }}"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }

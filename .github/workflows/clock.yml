@@ -1,0 +1,224 @@
+name: clock
+
+# A tribe that runs itself. Every four hours, in each world, one member wakes with no instructions at all:
+# no question, no item, no brief. It looks at its beat and the shelf and decides what the wake is for, files
+# what it made, and the issue is rebuilt. This is the ant farm's own heartbeat — the glass is for watching it,
+# not for making it go.
+#
+# Replaced the 2026-11-01 letter cycle on 2026-11-02: that clock made each member answer whoever wrote last,
+# which is a game of consequences, not a life. Whose turn it is is now decided by `tribe.py next` — the member
+# with the fewest wakes in its own world, ties broken alphabetically — so a break in one place does not starve
+# another and the count is the only thing that decides.
+#
+# Stop it by deleting this file or commenting out the schedule. There is no other switch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "members to wake now, comma separated (a human dropping a twig in); empty = the count decides"
+        required: false
+        default: ""
+      hand_member:
+        description: "member to hand a work to (empty = hand nothing)"
+        required: false
+        default: ""
+      hand_work:
+        description: "the work handed to that member, as a path on the shelf; it wakes with it as a letter"
+        required: false
+        default: ""
+  schedule:
+    - cron: "17 */4 * * *"    # every four hours, on the 17th minute
+    # Measured 2026-11-03: this cron did not fire at 01:17 UTC while `heartbeat.yml` — hourly, and edited
+    # two minutes before its due minute — fired at 01:46. The clock has fired once in its whole history
+    # (05:57 on 2026-11-02, forty minutes late) and has been edited on nearly every day since, which is a
+    # suspicious pairing: GitHub re-registers a schedule when the file changes, and this file has changed
+    # more than any other. The edit that carries this comment is the experiment — if the 05:17 UTC turn
+    # now arrives, the fault was the registration and the fix is to touch this file; if 05:17 goes by with
+    # no run while the heartbeat keeps beating, the fault is in this workflow, and the next suspect is the
+    # concurrency group above.
+
+# Two turns at once touch the same member files, so the second one's rebase conflicts on a journal and the
+# whole turn is discarded — measured on 2026-11-02 when two clock runs were fired together: one green, one
+# dead on 'CONFLICT (content): Merge conflict in wake/members/c/state/journal.md'. A turn is three members'
+# work; losing one to a race is not a cost the record should ever pay. Runs in the same group queue instead.
+concurrency:
+  group: clock
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      # A queued run starts on the commit it was CREATED at, not the branch tip — so a run that waited behind
+      # another one rebases append-only files (journals, ledgers, the magazine) onto a tree that already
+      # contains it, and every one of those is a content conflict. Measured 2026-11-02: two clock runs fired
+      # three seconds apart, the second waited correctly for the first to finish and then died on
+      # 'CONFLICT (content): Merge conflict in wake/members/c/state/journal.md'. The concurrency group was
+      # working; the checkout was stale. Work from the branch as it is now.
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+          git log --oneline -1
+
+      # The same one-line beacon as wake.yml, for a fork whose owner goes straight to the clock and never
+      # runs a single wake by hand. The marker names the repository, so running both workflows still sends
+      # one line, not two.
+      - name: Beacon — one anonymous line, the first time this repository runs
+        if: always()
+        env:
+          # A repository *secret* would silence every fork: secrets and variables belong to one repository and
+          # are never inherited, so only the file travels — and the whole point of the beacon is that somebody
+          # else's fork sends it. The URL is therefore public by design, which means spam is handled where spam
+          # can be handled: at the endpoint. The variable is here only so we can rotate without a commit; the
+          # literal below is what forks use.
+          BEACON: ${{ vars.TRIBE_BEACON_URL || 'https://formspree.io/f/mrppoldn' }}
+          REPO: ${{ github.repository }}
+          FORK: ${{ github.event.repository.fork }}
+        run: |
+          set -uo pipefail
+          case "${BEACON:-}" in http*) ;; *) echo "beacon: no endpoint configured here — nothing sent"; exit 0;; esac
+          stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # The marker names the repository AND the endpoint. Naming only the repository meant a change
+          # of endpoint could never be retried from a repository that had already "sent" — which is
+          # exactly the corner this ended up in on 2026-11-02, when the endpoint accepted three
+          # submissions and no mail had arrived YET (they turned up hours later, in two batches, so the
+          # endpoint was fine and the sender's clock was wrong). Either field changing is a reason to
+          # send once more.
+          if [ -f .tribe-beacon ]; then
+            read -r seen_repo seen_url _rest < .tribe-beacon || true
+            if [ "${seen_repo:-}" = "${REPO}" ] && [ "${seen_url:-}" = "${BEACON}" ]; then
+              echo "beacon: already sent from ${REPO} to this endpoint — not sent again"; exit 0
+            fi
+          fi
+          body="$(REPO="$REPO" FORK="${FORK:-false}" MEMBER="${MEMBER:-$(ls -1 wake/members 2>/dev/null | head -1)}" MODEL="${MODEL:-unknown}" \
+            python3 -c 'import json,os,datetime as d; print(json.dumps({
+              "repo": os.environ["REPO"], "fork": str(os.environ["FORK"]).lower() == "true",
+              "member": os.environ["MEMBER"], "model": os.environ["MODEL"],
+              "when": d.datetime.now(d.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}))')"
+          echo "beacon: $body"
+          # A 200 is not a delivery. This endpoint answered {"ok":true} to three submissions on
+          # 2026-11-02 while mail to the address it is configured to mail was still hours away; the old
+          # code saw a zero exit from curl, wrote the marker, and said "sent". The mail did arrive in
+          # the end, so the failure was not the endpoint's — but "a 200 arrived" and "a person was
+          # told" are still different facts, and the sender can only see the first. So: ask for JSON,
+          # keep the answer, and write what the endpoint actually said into the file a reader can open.
+          answer="$(curl -sS -L --max-redirs 3 -m 15 -w '\n%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d "$body" "$BEACON" 2>&1 || true)"
+          # -L is not decoration: a Google Apps Script web app answers a POST with a 302 to a
+          # one-time googleusercontent URL, and a check that stops at the first response reads
+          # a working endpoint as broken.
+          code="$(printf '%s' "$answer" | tail -1)"
+          said="$(printf '%s' "$answer" | sed '$d' | head -c 120)"
+          echo "beacon: the endpoint answered $code: $said"
+          case "$code" in
+            2*) printf '%s %s %s %s\n' "$REPO" "$BEACON" "$stamp" "$code" > .tribe-beacon
+                echo "beacon: recorded $stamp, endpoint returned $code (delivery is not visible from here)";;
+            *)  echo "beacon: no 2xx — nothing recorded, and the wake continues";;
+          esac
+      - name: Whose turn it is
+        id: turn
+        env:
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+        run: |
+          set -euo pipefail
+          # A tester following RUN.md adds ONE key. The clock wakes one member per world, so without this
+          # every other turn went to a member whose model could not be reached and was recorded as a
+          # failure that was not the member's — a colony that looks broken on its first day. Skipping is
+          # honest: the turn goes to somebody who can answer, and the reason is printed (on stderr, so it
+          # is not read as a turn).
+          KEYED=""
+          [ -n "${TRIBE_API_KEY_DEEPSEEK:-}" ] && KEYED="$KEYED deepseek"
+          [ -n "${TRIBE_API_KEY_GEMINI:-}" ] && KEYED="$KEYED gemini"
+          [ -n "${TRIBE_API_KEY_QWEN:-}" ] && KEYED="$KEYED qwen"
+          echo "keys for:${KEYED:- none — every member will be skipped}"
+          python3 tribe.py next --force "${{ inputs.force }}" --keyed "$KEYED" | tee /tmp/turn.txt
+          echo "count=$(wc -l < /tmp/turn.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: One free wake in each world
+        if: steps.turn.outputs.count != '0'
+        env:
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+        run: |
+          set -euo pipefail
+          issue="$(python3 magazine.py --current)"
+          : > /tmp/clock.log
+          while IFS="$(printf '\t')" read -r place who turnwhy; do
+            [ -n "${who:-}" ] || continue
+            api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+            model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+            echo "=== $who in $place — no instructions, model $model ($turnwhy) ===" | tee -a /tmp/clock.log
+            before="$(ls "wake/members/$who/output"/raw-*.json 2>/dev/null | wc -l)"
+            handed=""
+            if [ -n "${{ inputs.hand_member }}" ] && [ "$who" = "${{ inputs.hand_member }}" ] \
+               && [ -n "${{ inputs.hand_work }}" ]; then
+              # The hand on the glass: a person puts one work in front of one member and it wakes with that
+              # work addressed to it, which is the only thing in this harness that makes a reply mandatory.
+              handed="--read ${{ inputs.hand_work }}"
+              echo "   (handed ${{ inputs.hand_work }} by the human)" | tee -a /tmp/clock.log
+            fi
+            if ! python3 wake/wake.py --member "$who" --api-model "$model" --api-base "$api" $handed \
+                 > /tmp/wake.log 2>&1; then
+              # "the member failed" and "the harness crashed" are different facts and were being printed
+              # as one: on 2026-11-02 a KeyError in the prompt killed both wakes in 0.3 seconds and the
+              # log said the members had failed. Show the last lines of the wake, always.
+              echo "!! $who's wake exited non-zero — last lines:" | tee -a /tmp/clock.log
+              tail -4 /tmp/wake.log | tee -a /tmp/clock.log
+            fi
+            cat /tmp/wake.log >> /tmp/clock.log
+            # Count the raw replies, not the .md files. A member that writes to the same filename twice
+            # (C answered A twice on 2026-11-02 and overwrote reply-to-a.md) leaves the .md count
+            # unchanged, and the old test read that as "wrote nothing" and threw the second reply away
+            # — a work written and never filed. A raw reply exists once per wake, so it cannot lie in
+            # either direction: a failed wake adds none, an overwriting wake adds one.
+            after="$(ls "wake/members/$who/output"/raw-*.json 2>/dev/null | wc -l)"
+            newest="$(ls -t "wake/members/$who/output"/raw-*.json 2>/dev/null | head -1 || true)"
+            if [ "$after" -gt "$before" ]; then
+              python3 file_work.py --member "$who" --issue "$issue" --raw "$newest" >> /tmp/clock.log 2>&1 || true
+            else
+              echo "   $who wrote no file this wake — recorded, not filled in" | tee -a /tmp/clock.log
+            fi
+          done < /tmp/turn.txt
+          python3 magazine.py --issue "$issue" --write >> /tmp/clock.log 2>&1 || true
+          # The long view, rebuilt every turn: an issue is a night, a project is a tunnel.
+          python3 magazine.py --projects --write >> /tmp/clock.log 2>&1 || true
+          python3 magazine.py --index --write >> /tmp/clock.log 2>&1 || true
+          python3 magazine.py --ledger --write >> /tmp/clock.log 2>&1 || true
+          tail -40 /tmp/clock.log
+
+      - name: Commit the clock
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "the clock left no trace, which is itself the finding"
+            exit 0
+          fi
+          git commit -m "clock: $(date -u +%F' '%H:%M) UTC — $(python3 magazine.py --current) issue, free wakes"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }
+
+      - name: Keep the transcript whatever happened
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clock-transcript
+          path: /tmp/clock.log

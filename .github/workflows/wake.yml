@@ -1,0 +1,393 @@
+name: wake
+
+# One wake = one ephemeral machine. Nothing here runs between wakes.
+on:
+  workflow_dispatch:
+    inputs:
+      member:
+        description: "Which member wakes: a, b or c (default: a)"
+        required: false
+        default: "a"
+      engine:
+        description: "voice = the model named in the member's own voice.md (default) | weights = a model downloaded onto this machine"
+        required: false
+        default: "voice"
+      ask:
+        description: "A question from a human (blank = none)"
+        required: false
+        default: ""
+      model:
+        description: "Ollama tag, used only when engine=weights"
+        required: false
+        default: "qwen2.5:3b-instruct-q4_K_M"
+      item:
+        description: "Fix the task: act on this open item number only (blank = model chooses)"
+        required: false
+        default: ""
+      image:
+        description: "Path to a committed image to attach (blank = none)"
+        required: false
+        default: ""
+      read:
+        description: "Path to a committed letter this member must answer (blank = none)"
+        required: false
+        default: ""
+      api_model:
+        description: "Override the model id from voice.md (blank = use voice.md)"
+        required: false
+        default: ""
+      api_base:
+        description: "Endpoint name or URL: gemini, groq, openrouter, cerebras, mistral, deepseek, or a full URL"
+        required: false
+        default: "gemini"
+
+# One wake at a time: two wakes of the same member would conflict on its journal exactly as two clock turns
+# do. A queued wake is better than a dead one.
+concurrency:
+  group: wake
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # A queued run starts on the commit it was CREATED at, not the branch tip — so a run that waited behind
+      # another one rebases append-only files (journals, ledgers, the magazine) onto a tree that already
+      # contains it, and every one of those is a content conflict. Measured 2026-11-02: two clock runs fired
+      # three seconds apart, the second waited correctly for the first to finish and then died on
+      # 'CONFLICT (content): Merge conflict in wake/members/c/state/journal.md'. The concurrency group was
+      # working; the checkout was stale. Work from the branch as it is now.
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+          git log --oneline -1
+
+      - name: Where am I
+        run: |
+          echo "cores: $(nproc)"; free -g | head -2; df -h / | tail -1
+          python3 --version
+
+      # The member's own voice.md decides which model answers. It did not, until 2026-11-02: api_model
+      # defaulted to blank, blank meant "run weights on this machine", and every member in this
+      # repository is an API member — so the run RUN.md tells a stranger to try first ran a 3B model on
+      # a CPU, which is the failure this repository has already measured twice and warns about in §6a.
+      # A default that contradicts the shipped state is not a default, it is a trap.
+      - name: Whose voice — the member's own file decides
+        id: voice
+        env:
+          MEMBER: ${{ inputs.member }}
+          ENGINE: ${{ inputs.engine }}
+          API_MODEL: ${{ inputs.api_model }}
+          API_BASE: ${{ inputs.api_base }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          # A typo in the member name used to wake nothing and say nothing; the directory check is one
+          # line and the member list is the answer.
+          if [ ! -d "wake/members/${MEMBER:-$(ls -1 wake/members 2>/dev/null | head -1)}" ]; then
+            echo "!! there is no member called '${MEMBER}' here. The members of the two colonies are:"
+            for d in wake/members/*/; do
+              [ -f "$d/state/place.md" ] && printf '     %s\n' "$(basename "$d")"
+            done
+            exit 1
+          fi
+          voice="wake/members/${MEMBER:-$(ls -1 wake/members 2>/dev/null | head -1)}/state/voice.md"
+          api=""; model=""
+          if [ -f "$voice" ]; then
+            api="$(grep -E '^api:' "$voice" | head -1 | awk '{print $2}')"
+            model="$(grep -E '^model:' "$voice" | head -1 | awk '{print $2}')"
+          fi
+          if [ "${ENGINE:-voice}" = "weights" ]; then
+            echo "engine=weights" >> "$GITHUB_OUTPUT"
+            echo "model=${MODEL:-qwen2.5:3b-instruct-q4_K_M}"   >> "$GITHUB_OUTPUT"
+            echo "engine: weights on this machine (${MODEL:-qwen2.5:3b-instruct-q4_K_M}), asked for by name"
+          elif [ -n "${API_MODEL:-}" ]; then
+            echo "engine=api" >> "$GITHUB_OUTPUT"
+            echo "api_model=$API_MODEL" >> "$GITHUB_OUTPUT"
+            echo "api_base=${API_BASE:-gemini}" >> "$GITHUB_OUTPUT"
+            echo "engine: api $API_MODEL on ${API_BASE:-gemini}, named by hand"
+          elif [ -n "$api" ] && [ -n "$model" ]; then
+            echo "engine=api" >> "$GITHUB_OUTPUT"
+            echo "api_model=$model" >> "$GITHUB_OUTPUT"
+            echo "api_base=$api" >> "$GITHUB_OUTPUT"
+            echo "engine: api $model on $api — read from $voice"
+          else
+            echo "engine=weights" >> "$GITHUB_OUTPUT"
+            echo "model=${MODEL:-qwen2.5:3b-instruct-q4_K_M}" >> "$GITHUB_OUTPUT"
+            echo "engine: weights on this machine (${MODEL:-qwen2.5:3b-instruct-q4_K_M}) — no voice.md at $voice"
+          fi
+
+      # A missing key is the most likely first failure, and until now it surfaced as a 401 body with the
+      # key's last four characters in it and no statement of what to do. Percentages: the person has not
+      # read §5a yet, and the answer is one setting away.
+      - name: Is there a key for this voice
+        if: steps.voice.outputs.engine == 'api'
+        env:
+          API_BASE: ${{ steps.voice.outputs.api_base }}
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_GROQ: ${{ secrets.TRIBE_API_KEY_GROQ }}
+          TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
+          TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
+          TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+        run: |
+          set -euo pipefail
+          vendor="$(echo "$API_BASE" | tr 'a-z' 'A-Z')"
+          # One spelling, everywhere: the secret is TRIBE_API_KEY_<VENDOR> and the variable it lands in
+          # keeps that name. It used to be renamed on arrival to <VENDOR>_API_KEY, which is why the sheet
+          # and the tool disagreed about what a key is called — and why the terminal path was documented
+          # with a name the terminal did not read. 2026-11-03, on the founder's question.
+          name="TRIBE_API_KEY_${vendor}"
+          eval "key=\${$name:-}"
+          if [ -n "$key" ]; then
+            echo "key present for $API_BASE (${#key} characters, not printed)"
+            exit 0
+          fi
+          echo "!! This repository has no secret named TRIBE_API_KEY_${vendor}."
+          echo "   The member's own voice.md asks for $API_BASE, and without that key nobody can answer."
+          echo ""
+          echo "   Add it: Settings -> Secrets and variables -> Actions -> New repository secret"
+          echo "           Name:  TRIBE_API_KEY_${vendor}"
+          echo "           Value: your key from that vendor"
+          echo ""
+          echo "   The members of the two colonies here, and the secret each one needs:"
+          for d in wake/members/*/; do
+            m="$(basename "$d")"
+            # Only members that stand in a place: the rest are fixtures kept for the tests, and a
+            # first-run error message that lists ten members when six exist is a wall, not a signpost.
+            [ -f "$d/state/place.md" ] || continue
+            v="$(grep -E '^api:' "$d/state/voice.md" 2>/dev/null | head -1 | awk '{print $2}')"
+            [ -n "$v" ] || continue
+            printf '     member=%-6s TRIBE_API_KEY_%s\n' "$m" "$(echo "$v" | tr 'a-z' 'A-Z')"
+          done
+          echo ""
+          echo "   Or re-run this workflow with engine=weights to use no key at all (slow, and §6a says why it is worse)."
+          exit 1
+
+      # Interest is not measurable from the inside. A clone runs nothing — git does not execute code — so
+      # the only honest moment to count a trial is the first time this repository actually wakes somebody.
+      # Once per repository, by a marker committed with the wake: a fork inherits this file from upstream,
+      # so the marker has to name the repository it was sent from or every fork would look already-counted.
+      #
+      # One line, nothing the person wrote: repository name, fork-or-not, member, model, time. No state
+      # files, no works, no question, no key. It never fails a wake, and with no endpoint configured it
+      # sends nothing and says so.
+      - name: Beacon — one anonymous line, the first time this repository runs
+        if: always()
+        env:
+          # A repository *secret* would silence every fork: secrets and variables belong to one repository and
+          # are never inherited, so only the file travels — and the whole point of the beacon is that somebody
+          # else's fork sends it. The URL is therefore public by design, which means spam is handled where spam
+          # can be handled: at the endpoint. The variable is here only so we can rotate without a commit; the
+          # literal below is what forks use.
+          BEACON: ${{ vars.TRIBE_BEACON_URL || 'https://formspree.io/f/mrppoldn' }}
+          REPO: ${{ github.repository }}
+          FORK: ${{ github.event.repository.fork }}
+          MEMBER: ${{ inputs.member }}
+          MODEL: ${{ steps.voice.outputs.api_model || steps.voice.outputs.model }}
+        run: |
+          set -uo pipefail
+          case "${BEACON:-}" in http*) ;; *) echo "beacon: no endpoint configured here — nothing sent"; exit 0;; esac
+          stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # The marker names the repository AND the endpoint. Naming only the repository meant a change
+          # of endpoint could never be retried from a repository that had already "sent" — which is
+          # exactly the corner this ended up in on 2026-11-02, when the endpoint accepted three
+          # submissions and no mail had arrived YET (they turned up hours later, in two batches, so the
+          # endpoint was fine and the sender's clock was wrong). Either field changing is a reason to
+          # send once more.
+          if [ -f .tribe-beacon ]; then
+            read -r seen_repo seen_url _rest < .tribe-beacon || true
+            if [ "${seen_repo:-}" = "${REPO}" ] && [ "${seen_url:-}" = "${BEACON}" ]; then
+              echo "beacon: already sent from ${REPO} to this endpoint — not sent again"; exit 0
+            fi
+          fi
+          body="$(REPO="$REPO" FORK="${FORK:-false}" MEMBER="${MEMBER:-$(ls -1 wake/members 2>/dev/null | head -1)}" MODEL="${MODEL:-unknown}" \
+            python3 -c 'import json,os,datetime as d; print(json.dumps({
+              "repo": os.environ["REPO"], "fork": str(os.environ["FORK"]).lower() == "true",
+              "member": os.environ["MEMBER"], "model": os.environ["MODEL"],
+              "when": d.datetime.now(d.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}))')"
+          echo "beacon: $body"
+          # A 200 is not a delivery. This endpoint answered {"ok":true} to three submissions on
+          # 2026-11-02 while mail to the address it is configured to mail was still hours away; the old
+          # code saw a zero exit from curl, wrote the marker, and said "sent". The mail did arrive in
+          # the end, so the failure was not the endpoint's — but "a 200 arrived" and "a person was
+          # told" are still different facts, and the sender can only see the first. So: ask for JSON,
+          # keep the answer, and write what the endpoint actually said into the file a reader can open.
+          answer="$(curl -sS -L --max-redirs 3 -m 15 -w '\n%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -H 'Accept: application/json' \
+            -d "$body" "$BEACON" 2>&1 || true)"
+          # -L is not decoration: a Google Apps Script web app answers a POST with a 302 to a
+          # one-time googleusercontent URL, and a check that stops at the first response reads
+          # a working endpoint as broken.
+          code="$(printf '%s' "$answer" | tail -1)"
+          said="$(printf '%s' "$answer" | sed '$d' | head -c 120)"
+          echo "beacon: the endpoint answered $code: $said"
+          case "$code" in
+            2*) printf '%s %s %s %s\n' "$REPO" "$BEACON" "$stamp" "$code" > .tribe-beacon
+                echo "beacon: recorded $stamp, endpoint returned $code (delivery is not visible from here)";;
+            *)  echo "beacon: no 2xx — nothing recorded, and the wake continues";;
+          esac
+      - name: Install ollama (CPU only, no GPU on a runner)
+        if: steps.voice.outputs.engine == 'weights'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          (ollama serve > /tmp/ollama.log 2>&1 &)
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:11434/api/tags >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:11434/api/tags && echo "ollama up"
+
+      - name: Pull the model
+        if: steps.voice.outputs.engine == 'weights'
+        run: |
+          time ollama pull "${{ steps.voice.outputs.model }}"
+          ollama list
+
+      - name: What this API offers (names only — no key is printed)
+        if: steps.voice.outputs.engine == 'api' && steps.voice.outputs.api_base == 'gemini'
+        env:
+          # One secret per member, named for its provider: TRIBE_API_KEY_<PROVIDER>. The generic
+          # TRIBE_API_KEY is gone (2026-11-01) because one key for a two-vendor tribe sends the wrong
+          # credential to the wrong endpoint, which is a 401 with the key's tail printed in the error.
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_GROQ: ${{ secrets.TRIBE_API_KEY_GROQ }}
+          TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
+          TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
+          TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+        run: |
+          set -euo pipefail
+          curl -sf -H "x-goog-api-key: ${TRIBE_API_KEY_GEMINI}" \
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200" \
+            | python3 -c "import json,sys;d=json.load(sys.stdin);print('\n'.join(sorted(m['name'] for m in d.get('models',[]) if 'generateContent' in m.get('supportedGenerationMethods',[]))))" || echo "(could not list models)"
+
+      - name: One wake
+        env:
+          ENGINE: ${{ steps.voice.outputs.engine }}
+          MODEL: ${{ steps.voice.outputs.model }}
+          ITEM: ${{ inputs.item }}
+          ASK: ${{ inputs.ask }}
+          IMG: ${{ inputs.image }}
+          MEMBER: ${{ inputs.member }}
+          READ: ${{ inputs.read }}
+          API_MODEL: ${{ steps.voice.outputs.api_model }}
+          API_BASE: ${{ steps.voice.outputs.api_base }}
+          # One secret per member, named for its provider. A single generic secret is how a member
+          # ends up authenticating to the wrong vendor — a 401 with the key's tail in the body.
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_GROQ: ${{ secrets.TRIBE_API_KEY_GROQ }}
+          TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
+          TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
+          TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+        run: |
+          set -euo pipefail
+          # The model goes in first so the array is never empty: "${ARGS[@]:-}" on an empty array
+          # expands to one empty argument and argparse rejects it. Every earlier run passed an item
+          # or a question, so the default path — the one RUN.md tells a stranger to take first — had
+          # never been exercised. Found on 2026-11-01 by following our own instructions.
+          if [ "${ENGINE:-weights}" = "api" ] && [ -n "${API_MODEL:-}" ]; then
+            ARGS=(--api-model "$API_MODEL" --api-base "${API_BASE:-gemini}")
+          else
+            ARGS=(--model "$MODEL")
+          fi
+          # The default member is `a`, the first member in every world. It used to be blank, and blank
+          # meant the single-member layout at wake/state — which on a fresh clone still exists, with a
+          # record from 2026-11-01 in it, so a stranger's first wake would have continued a dead member's
+          # journal and looked exactly like success. 2026-11-02.
+          [ -n "${MEMBER:-}" ] && ARGS+=(--member "$MEMBER")
+          [ -n "${READ:-}" ] && ARGS+=(--read "$READ")
+          [ -n "${ITEM:-}" ] && ARGS+=(--item "$ITEM")
+          [ -n "${ASK:-}" ] && ARGS+=(--ask "$ASK")
+          [ -n "${IMG:-}" ] && ARGS+=(--image "$IMG")
+          # The scheduled beat prints the prompt, because here the prompt IS the record: when a member
+          # refuses or answers wrongly, the log is the only place to see what it was asked. A person at
+          # a terminal asking a question does not want 25,000 characters between them and the answer.
+          ARGS+=(--show-prompt)
+          printf 'args:'; printf ' [%s]' "${ARGS[@]}"; echo
+          touch /tmp/wake-start
+          python3 wake/wake.py "${ARGS[@]}" 2>&1 | tee /tmp/wake.log
+
+      # The clock filed what its members wrote. This path did not, and nobody noticed for a day because
+      # RUN.md tells a stranger to read `output/`, which is where the file lands either way. The visible
+      # difference is the magazine and the shelf: after a hand wake the colony had grown by nothing, the
+      # work was invisible to the other five members, and the next clock turn could not answer it. Measured
+      # 2026-11-02: member b2's wake wrote a playable game into output/ and works/b2/ did not change.
+      # Everything the clock does after a wake happens here now, guarded so a re-run does not file the
+      # same reply twice.
+      - name: File what this wake wrote, so the shelf and the magazine can see it
+        env:
+          # Without this the step defaulted to member `a` and reported "this wake left no raw reply" after
+          # a2 had written one — a2's work filed nowhere and an error message that blamed the member.
+          # Caught on the first run of this step, 2026-11-02 18:20.
+          MEMBER: ${{ inputs.member }}
+        run: |
+          set -euo pipefail
+          m="${MEMBER:-$(ls -1 wake/members 2>/dev/null | head -1)}"
+          if [ ! -f /tmp/wake-start ]; then
+            echo "the wake step never started — nothing to file"
+            exit 0
+          fi
+          newest="$(ls -t "wake/members/$m/output"/raw-*.json 2>/dev/null | head -1 || true)"
+          if [ -z "$newest" ] || [ ! "$newest" -nt /tmp/wake-start ]; then
+            echo "$m: this wake left no raw reply — nothing to file (a refusal is recorded in the journal)"
+            exit 0
+          fi
+          issue="$(python3 magazine.py --current)"
+          python3 file_work.py --member "$m" --issue "$issue" --raw "$newest" || \
+            echo "!! $m: filing failed — the reply is still in $newest and the journal still says what happened"
+
+      # A single wake by hand filed a work and left every derived view as it was, so LEDGER.md on disk said
+      # A owed nothing while the record said it owed one — found by deleting the derived files in a copy and
+      # rebuilding them (lab/derivable.py). The clock rebuilt after its turn; this path did not, and readers
+      # do not know which path wrote a file.
+      - name: Rebuild what is derived
+        if: always()
+        run: |
+          set -euo pipefail
+          issue="$(python3 magazine.py --current)"
+          python3 magazine.py --issue "$issue" --write > /dev/null || echo "!! the magazine did not rebuild"
+          python3 magazine.py --projects --write || true
+          python3 magazine.py --index --write || true
+          python3 magazine.py --ledger --write || true
+          git diff --stat -- issues LEDGER.md PROJECTS.md MEMBERS.md || true
+
+      - name: Keep the transcript whatever happened
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wake-transcript
+          path: |
+            /tmp/wake.log
+            /tmp/ollama.log
+            wake/state/journal.md
+            wake/output/
+            wake/members/
+
+      - name: Commit what the wake wrote
+        if: always()
+        run: |
+          git config user.name "AI Tribe Bench"
+          git config user.email "ai-tribe-bench@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit — the wake left no trace, which is itself the finding"
+          else
+            git commit -m "wake: ${{ inputs.member || 'a' }} on ${{ steps.voice.outputs.api_model || steps.voice.outputs.model }} at $(date -u +%FT%TZ)
+
+          Architecture: ${{ steps.voice.outputs.engine }} — ${{ steps.voice.outputs.engine == 'api' && format('{0} on {1} (key from TRIBE_API_KEY_{2})', steps.voice.outputs.api_model, steps.voice.outputs.api_base, steps.voice.outputs.api_base) || format('{0} (open weights, CPU inference)', steps.voice.outputs.model) }}"
+            git push
+          fi

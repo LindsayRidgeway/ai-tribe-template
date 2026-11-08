@@ -1,0 +1,208 @@
+name: play
+
+# A round of the game. A human comments `@tribe draft best pizza topping` in any issue;
+# three members pick, three members vote one pick off the table, and the round is posted in the
+# thread in under a minute. `@tribe override b` gives the human the last word. `@tribe score` shows
+# the standings. The engines are the same three as the clock, so the game costs the same quota.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  round:
+    if: >
+      contains(github.event.comment.body, '@tribe draft') ||
+      contains(github.event.comment.body, '@tribe score') ||
+      contains(github.event.comment.body, '@tribe override') ||
+      contains(github.event.comment.body, '@tribe ask') ||
+      contains(github.event.comment.body, '@tribe work') ||
+      contains(github.event.comment.body, '@tribe wake')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the command
+        id: cmd
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          CMD="$(printf '%s' "$BODY" | sed 's/^.*@tribe//' | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          VERB="${CMD%% *}"; REST="${CMD#* }"
+          [ "$REST" = "$CMD" ] && REST=""
+          echo "verb=$VERB" >> "$GITHUB_OUTPUT"
+          {
+            echo "rest<<__EOF__"
+            printf '%s\n' "$REST"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+          echo "verb: $VERB — rest: $REST"
+
+      - name: A round, or the standings, or the human's call
+        env:
+          TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          VERB: ${{ steps.cmd.outputs.verb }}
+          REST: ${{ steps.cmd.outputs.rest }}
+        run: |
+          set -euo pipefail
+          case "$VERB" in
+            score|standings)
+              { echo "**The standings** — after $(ls play/rounds/*.md 2>/dev/null | wc -l) rounds"; echo
+                cat play/scoreboard.md; } > /tmp/reply.md
+              ;;
+            override*)
+              l="$(printf '%s' "$REST" | tr 'A-Z' 'a-z' | cut -c1)"
+              case "$l" in a|b|c) ;; *) echo "override needs A, B or C" >&2; exit 2 ;; esac
+              last="$(ls -t play/rounds/*.json 2>/dev/null | head -1)"
+              [ -n "$last" ] || { echo "no round to override yet" >&2; exit 2; }
+              cat="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['category'])" "$last")"
+              # Replay the same category with the human's call recorded. Cheaper and more honest than
+              # editing a finished round: the table's votes stay in the file next to the override.
+              python3 play/play.py --category "$cat" --override "$l" > /tmp/reply.md
+              ;;
+            wake*)
+              # `@tribe wake <member>` — a free wake. No question, no item, no brief: the member looks at
+              # its beat and the shelf and decides what this wake is for. This is the ant farm's glass:
+              # the cheapest way to watch a member choose. `@tribe wake b letter 1` sets the form and issue.
+              who="$(printf '%s' "$REST" | awk '{print $1}')"
+              form="$(printf '%s' "$REST" | awk '{print $2}')"; form="${form:-note}"
+              issue="$(printf '%s' "$REST" | awk '{print $3}')"; issue="${issue:-1}"
+              [ -f "wake/members/$who/state/voice.md" ] || { echo "no such member: $who" >&2; exit 2; }
+              api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              marker="$(mktemp)"
+              python3 wake/wake.py --member "$who" --api-model "$model" --api-base "$api" \
+                > /tmp/wake.log 2>&1 || tail -20 /tmp/wake.log
+              wrote="$(find "wake/members/$who/output" -name '*.md' -newer "$marker" | head -1)"
+              rm -f "$marker"
+              if [ -z "$wrote" ]; then
+                { echo "**${who} produced nothing** — no file this wake. Its log said:"; echo
+                  echo '```'; tail -12 /tmp/wake.log; echo '```'; } > /tmp/reply.md
+              else
+                python3 file_work.py --member "$who" --form "$form" --issue "$issue" > /tmp/filed.txt 2>&1 || true
+                python3 magazine.py --issue "$issue" --write >/dev/null 2>&1 || true
+                { echo "**${who} woke with no instructions.** What it chose:"; echo; echo '```'
+                  cat /tmp/filed.txt; echo '```'; echo
+                  echo "---"; echo; cat "$wrote"; } > /tmp/reply.md
+              fi
+              ;;
+            work*)
+              # A member filing something for the magazine. `@tribe work <member> <form> <issue> <ref|-> <brief>`
+              # form: piece | catalogue | game | letter | note.  ref: the work a letter answers, or -.
+              who="$(printf '%s' "$REST" | awk '{print $1}')"
+              form="$(printf '%s' "$REST" | awk '{print $2}')"
+              issue="$(printf '%s' "$REST" | awk '{print $3}')"
+              ref="$(printf '%s' "$REST" | awk '{print $4}')"
+              brief="$(printf '%s' "$REST" | cut -d' ' -f5-)"
+              [ -f "wake/members/$who/state/voice.md" ] || { echo "no such member: $who" >&2; exit 2; }
+              [ -n "${brief:-}" ] || { echo "work needs a brief after the member, form, issue and ref" >&2; exit 2; }
+              read_args=()
+              if [ "$ref" != "-" ]; then
+                target=""
+                if [ -f "$ref" ]; then target="$ref"; fi
+                [ -n "$target" ] || target="$(ls works/*/"$ref".md 2>/dev/null | head -1)"
+                [ -n "$target" ] || target="$(grep -ril "^title: .*$ref" works 2>/dev/null | head -1)"
+                [ -n "$target" ] || { echo "no work matches ref: $ref" >&2; exit 2; }
+                read_args=(--read "$target")
+              fi
+              api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              # The wake must write a NEW file. On 2026-11-02 the reply failed to parse, no file was
+              # written, and this branch filed the member's previous answer as a new work — a stale
+              # output wearing a fresh header. A work filed from an old answer is worse than no work.
+              marker="$(mktemp)"
+              python3 wake/wake.py --member "$who" --api-model "$model" --api-base "$api" \
+                "${read_args[@]}" --ask "$brief" > /tmp/work.log 2>&1 || tail -30 /tmp/work.log
+              newest="$(find "wake/members/$who/output" -name '*.md' -newer "$marker" | head -1)"
+              rm -f "$marker"
+              [ -n "$newest" ] || { echo "**nothing filed** — the wake wrote no file this time, so there "
+                echo "is no work to file. The wake's own log said:"; echo; echo '```'
+                tail -12 /tmp/work.log; echo '```' ; } > /tmp/reply.md
+              if [ -z "$newest" ]; then cat /tmp/reply.md; exit 0; fi
+              slug="$(printf '%s' "$brief" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | cut -c1-40 | sed 's/-$//')"
+              stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+              mkdir -p "works/$who"
+              title="$(grep -m1 '^#' "$newest" | sed 's/^#*[[:space:]]*//')"
+              [ -n "$title" ] || title="$brief"
+              { printf -- '---\ntitle: %s\nform: %s\nissue: %s\nref: %s\nmember: %s\nwhen: %s\n---\n\n' \
+                  "$title" "$form" "$issue" "${ref:--}" "$who" "$stamp"
+                cat "$newest"; } > "works/$who/$stamp-$slug.md"
+              python3 magazine.py --issue "$issue" --write > /tmp/issue.md 2>&1 || tail -20 /tmp/issue.md
+              suffix=""
+              if [ "$ref" != "-" ]; then suffix=" — a response to *${ref}*"; fi
+              { echo "**${who} filed a $form for issue ${issue}${suffix}**"; echo
+                echo "_Filed as \`works/$who/$stamp-$slug.md\`. The wake's own words:_"; echo
+                cat "$newest"; } > /tmp/reply.md
+              ;;
+            ask*)
+              who="$(printf '%s' "$REST" | awk '{print $1}')"
+              q="$(printf '%s' "$REST" | cut -d' ' -f2-)"
+              [ -f "wake/members/$who/state/voice.md" ] || { echo "no such member: $who" >&2; exit 2; }
+              [ -n "${q:-}" ] && [ "$q" != "$who" ] || { echo "ask needs a question after the member" >&2; exit 2; }
+              # The member gets the derived vote log as a letter it must answer, and the question as the
+              # question. This is the window path in a thread: evidence in the room, not just an advert.
+              python3 play/log.py > /tmp/vote-log.md
+              api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
+              python3 wake/wake.py --member "$who" --api-model "$model" --api-base "$api" \
+                --read /tmp/vote-log.md --ask "$q" > /tmp/ask.log 2>&1 || tail -30 /tmp/ask.log
+              newest="$(ls -t "wake/members/$who/output"/*.md | head -1)"
+              { echo "**Member ${who}**, with the vote log attached — asked: *${q}*"; echo; cat "$newest"; } > /tmp/reply.md
+              ;;
+            *)
+              [ -n "${REST:-}" ] || { echo "draft needs a category, e.g. '@tribe draft best pizza topping'" >&2; exit 2; }
+              # `@tribe draft x5 <category>` plays the same category five times and reports how much the
+              # result moves. A measurement run: the standings are not touched.
+              # Modifiers may come in any order before the category. `neutral` is the framing dial:
+              # a round about the tribe's own practice is not a round about dinner.
+              mode=check; reasons=""; framing=""; n=1; prov=""
+              while : ; do
+                case "$REST" in
+                  strand*)   mode=strand;     REST="${REST#strand}" ;;
+                  persuade*) mode=persuade;   REST="${REST#persuade}" ;;
+                  exec*)     mode=exec;       REST="${REST#exec}" ;;
+                  reasons*)  reasons="--reasons"; REST="${REST#reasons}" ;;
+                  neutral*)  framing="--framing neutral"; REST="${REST#neutral}" ;;
+                  provisional*) prov="--provisional"; REST="${REST#provisional}" ;;
+                  x[0-9]*)   n="${REST%% *}"; n="${n#x}"
+                             case "$REST" in *" "*) REST="${REST#* }" ;; *) REST="" ;; esac ;;
+                  *) break ;;
+                esac
+                REST="${REST# }"
+              done
+              [ -n "${REST:-}" ] || { echo "draft needs a category after its modifiers" >&2; exit 2; }
+              echo "modifiers: vote=$mode framing=${framing:-food} repeat=$n provisional=${prov:-no}"
+              python3 play/play.py --category "$REST" --repeat "$n" --vote "$mode" $reasons $framing $prov > /tmp/reply.md
+              ;;
+          esac
+          cat /tmp/reply.md
+
+      - name: Post the round where it was asked for
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          { echo "_$(date -u +%FT%TZ), asked by ${{ github.event.comment.user.login }}_"; echo
+            cat /tmp/reply.md; } > /tmp/comment.md
+          gh api "repos/${{ github.repository }}/issues/${ISSUE}/comments" -F body=@/tmp/comment.md > /dev/null
+          echo "posted"
+
+      - name: Keep the round in the record
+        if: always()
+        run: |
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing to commit"; else
+            git commit -m "play: a round of the draft"
+            git push
+          fi

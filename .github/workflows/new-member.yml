@@ -1,0 +1,159 @@
+name: new-member
+
+# Add a member without a terminal.
+#
+# This is the step the founder's outline needed and the shipped project did not have: `tribe.py new` is a
+# command, and a person whose only tool is a browser cannot type one. Here the same command runs on a runner,
+# driven by a form, and the result is committed — three files a stranger never has to hand-edit.
+#
+# The name is the only thing that must be right. Everything else has a default that can be changed later by
+# editing one line of the member's own voice.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "the member's name — one word, letters and digits, starting with a letter"
+        required: true
+      seat:
+        description: "what it is for, in a phrase: the correspondent, the surveyor, the repairer"
+        required: true
+        default: "the newcomer"
+      engine:
+        description: "which engine it borrows"
+        type: choice
+        options:
+          - gemini
+          - qwen
+          - deepseek
+          - openai
+          - groq
+          - mistral
+          - cerebras
+          - openrouter
+          - together
+          - anthropic
+        # `local` is missing on purpose: it means weights on the machine running the wake, and a GitHub
+        # runner has none. A member on those weights is made at a terminal — `tribe.py new --api local`.
+        default: "gemini"
+      model:
+        description: "which model of that engine — leave blank for the project's usual one"
+        required: false
+        default: ""
+      place:
+        description: "which world it stands in — leave blank when your colony has only one"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: new-member
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Create the member
+        env:
+          NAME: ${{ inputs.name }}
+          SEAT: ${{ inputs.seat }}
+          ENGINE: ${{ inputs.engine }}
+          MODEL: ${{ inputs.model }}
+          PLACE: ${{ inputs.place }}
+        run: |
+          set -euo pipefail
+          # The worlds are folders under soil/, not a list in this file. A dropdown here would be a copy of
+          # that list, written the day this file was written and wrong the first time somebody renames a
+          # world — the failure this repository keeps finding. So the field stays free text and the value is
+          # checked against the folders, which is the same protection with nothing to go stale.
+          if [ -n "$PLACE" ] && [ ! -d "soil/$PLACE" ]; then
+            echo "::error::there is no world called '$PLACE' in this copy. The worlds it has are:"
+            ls -1 soil/ | sed 's/^/  - /'
+            echo "Nothing was created. Send this form again with one of those names, exactly as written."
+            exit 1
+          fi
+
+          # An existing member is not an error: it is the person coming back to finish the job. Before
+          # 2026-11-07 this step ran `new` again, which refuses an existing record, while the message
+          # underneath told the reader to "run this form again with the place field filled". That advice
+          # looped. Found by the founder on a phone, where there is no shell to fall back on.
+          if [ -d "wake/members/$NAME" ]; then
+            if [ -z "$PLACE" ]; then
+              echo "::error::$NAME already exists in this colony, so nothing was created."
+              echo "To put it in a world, send this form again with the SAME name and the place field filled."
+              echo "To change anything else about it, edit its files in wake/members/$NAME/state/."
+              exit 1
+            fi
+            python3 tribe.py place "$NAME" "$PLACE" | tee /tmp/created.txt
+            echo "$NAME was already here; it has been placed in $PLACE." >> /tmp/created.txt
+          else
+            args=(--seat "$SEAT" --api "$ENGINE")
+            [ -n "$MODEL" ] && args+=(--model "$MODEL")
+            [ -n "$PLACE" ] && args+=(--place "$PLACE")
+            python3 tribe.py new "$NAME" "${args[@]}" | tee /tmp/created.txt
+          fi
+
+          if [ ! -f "wake/members/$NAME/state/place.md" ]; then
+            echo "::warning::$NAME stands in no world yet, so no clock will ever wake it."
+            echo "::warning::Send this form again with the same name and the place field filled with one of:"
+            ls -1 soil/ | while read -r w; do echo "::warning::  $w"; done
+          fi
+
+      - name: Check it against the schema before anything is committed
+        env:
+          NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          if ! python3 tribe.py validate "$NAME" | tee /tmp/validated.txt; then
+            echo "::error::$NAME does not validate — nothing was committed"
+            rm -rf "wake/members/$NAME"
+            exit 1
+          fi
+
+      - name: Publish the new list, so every drop list follows
+        run: |
+          set -euo pipefail
+          python3 lab/members.py --write | tee -a /tmp/created.txt
+          python3 lab/members.py --check
+
+      - name: Commit it to the record
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "new-member: ${{ inputs.name }} (${{ inputs.seat }}) — created from the Run-workflow form"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }
+
+      - name: Say what happened, on the page the person is looking at
+        if: always()
+        run: |
+          {
+            echo "## ${NAME:-new member}"
+            echo
+            echo '```'
+            cat /tmp/created.txt 2>/dev/null || echo "(the create step did not run)"
+            echo '```'
+            echo
+            echo "Next: open an issue with \`@tribe ${NAME:-name}: hello\` — or use the page, if this"
+            echo "repository has one — and it will answer in the thread."
+            echo
+            echo "If its files say it stands in no world, give it one: edit"
+            echo "\`wake/members/${NAME:-name}/state/place.md\` to read \`place: <your world>\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          NAME: ${{ inputs.name }}
