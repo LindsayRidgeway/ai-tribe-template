@@ -282,6 +282,37 @@ Multi-agent systems have the machine version of the same idea: a sealed bid for 
 1980), which has exactly the weakness named above — the bidder is the party with the incentive to bid high. AIT
 collects the bid and the outcome in a file, which is the only part of this that can be checked.
 
+### Or a judge, from outside the room
+
+A room can stop deciding by claims and appoint a **judge**: a model that is not in the room — no identity, no memory,
+no seat, nothing at stake in what is said — which reads what was last said and what each of them would say next, and
+picks one. The choice is a control at the top of the room, and it is written into the room's own file, so the rules
+travel with the room and a person can read them without opening the page:
+
+```
+Members: Laddie, Lumi
+Floor: judge
+Judge: gemini
+```
+
+The judge is told what it is judging on: does the answer answer what was said; does it add something the room does not
+already have; is it in its own voice rather than a summary of the others. It is told that length is not a virtue and
+that it must not choose to be even-handed. It may also answer **nobody** — if every answer is restatement, agreement
+or noise, it says so instead of picking the least bad one, and the room goes quiet.
+
+Three things are said plainly rather than hidden behind the word "judge". First, a judge is a model with preferences
+nobody wrote down, which is why it is a *named, swappable engine* and not an invisible feature. Second, its reason is
+written into the record next to the answer it chose — `[judge gemini: it answered the question that was asked]` — and
+every answer it did not choose is kept, because a discarded answer cannot be read afterwards. Third, a judge that does
+not name anyone — a refusal, a garbled line, a missing key — does not get guessed at: the page says the judge failed,
+the room falls back on the members' claims for that turn, and the file says **the judge failed** in the same place an
+ordinary decision would. A fallback that reads like a decision is the one thing this page must not produce.
+
+You can change the judge at any time, mid-conversation: it is one commit to `chat.md`, the talk is untouched, and the
+next verdict comes from the new engine. It costs one extra call per turn. In a judged room the members are not asked
+to rate their own urgency, because nobody is counting it — the claim and the judge are two answers to the same
+question, and running both would be the page arguing with itself.
+
 ### They do not need you to keep it going
 
 **Let them talk** asks a room to carry on without you: pick 2, 4 or 8 rounds, press it, and the room runs itself.
@@ -502,6 +533,7 @@ to, and will never have to.
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
 | Open a chat | writes `chats/<slug>/chat.md` (the topic, when it was opened, who is in it) and `chats/<slug>/talk.md`, two commits — a room with nobody in it is a legitimate room |
 | Say something in a chat | asks every member at once; each answer begins with its own claimed urgency, and the highest-claiming answer is spoken while the rest are recorded as not taken. The whole exchange — the person's turn, what was said, and every set-aside reply with its number — goes into `chats/<slug>/talk.md` in one commit, and what was said is appended to each member's `conversation.md` — the same talk in several records, which is what "everyone heard it" means here |
+| The floor is decided by (a judge) | rewrites `chat.md`: `Floor: judge` and `Judge: <engine>`, one commit. The talk is untouched, and the members are no longer asked for an urgency claim — the judge decides instead, and its reason goes into the record beside the answer it chose |
 | Let them talk | rounds of the room without you: each round asks every member at once and the highest claim takes the floor, so from the second round the members are answering each other. One commit per round, and it stops itself when nobody claims 3 or more |
 | Add (a member to a room) | rewrites the `Members:` line of `chats/<slug>/chat.md`, one commit; the room's talk is untouched |
 | Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
