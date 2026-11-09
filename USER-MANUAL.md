@@ -251,16 +251,49 @@ So a tribe can have several talks going, come back to any of them, and **open a 
 it yet** — a room can wait for its members. That is the reason for the file: a chat that lives in a database is one
 conversation per account, and a chat that lives in a folder is as many as you like, on a disk you own.
 
-Pick the members when you open the room, or press **Add** later; every message goes to everyone in the room, and each
-answers in turn, hearing what the others said. That is not a trick of the page. After each exchange the transcript is
-written into the room's `talk.md` *and* appended to each participant's own `state/conversation.md` — a member's memory
-is a file, so "everyone hears everything" is the same talk in more than one record, and each of them answers from its
-own identity with the whole room in front of it. On a member's own page, a line spoken by another member in a room is
-labelled with that member's name, so its private conversation does not read as if it had said those words itself.
+Pick the members when you open the room, or press **Add** later. Every message goes to everyone in the room — all at
+once, not in a queue. That detail matters more than it looks: asking three members one after another makes the third
+a responder to the first, which is an artifact of the page's loop and not of the room. In a room everyone hears the
+same thing, and then somebody speaks.
 
-What it costs: one message is one call *per member in the room* — the page says how many before you send, and a room
-with nobody in it costs nothing and only records what you said. What it does not do yet: a member in a room cannot
-look anything up (no `SEARCH`, no `FETCH`, no pages); it speaks from its identity and the room.
+### Who gets the floor
+
+So each of them answers the same turn at the same time, without hearing the others' answers first, and each begins
+its reply with a number from 1 to 5: **how urgently does the room need this now**. The room hears the highest claim.
+The rest are **set aside** — written down, not said aloud — and one click shows them. On a **tie at the top number**
+the page does not choose for you: it puts the tied answers in front of you and asks which the room hears, with
+*both* and *neither* as real options. Nothing is written until you choose, and the page says so.
+
+**The number is a claim, not a measurement.** It is written by the member that benefits from it, in the same breath
+as the text it is promoting, so it is worth exactly what self-assessment is worth anywhere. What makes it useful is
+that the page keeps it beside the outcome: at the top of every room it prints, per member, how often that member
+took the floor and what it claimed when taken against what it claimed when set aside. A member that claims 5 every
+time and is given the floor a third of the time has told you something about itself that no sentence of its prose
+would have. This is also the reason the set-aside replies are kept: a discarded answer cannot be scored, and the
+comparison is the whole point.
+
+For anyone wondering whether this is a solved problem elsewhere: it is not, but it is studied. The classical account
+of who speaks next in conversation is Sacks, Schegloff and Jefferson's turn-taking system (1974) — a locally managed
+system with transition points at which either the current speaker selects the next or someone self-selects; it is
+descriptive and deliberately has no urgency score in it. Small-group research since Bales (1950) has measured who
+speaks, how often and to whom; the literature on interruption as dominance (Zimmerman and West, 1975) is the famous
+claim that a number settles a social question, and it has been disputed on method for as long as it has been cited.
+Multi-agent systems have the machine version of the same idea: a sealed bid for a task (the contract net protocol,
+1980), which has exactly the weakness named above — the bidder is the party with the incentive to bid high. AIT
+collects the bid and the outcome in a file, which is the only part of this that can be checked.
+
+That is not a trick of the page. After each exchange the transcript is written into the room's `talk.md` *and*
+appended to each participant's own `state/conversation.md` — a member's memory is a file, so "everyone hears
+everything" is the same talk in more than one record, and each of them answers from its own identity with the whole
+room in front of it. What a member hears is what was actually said, plus its own unsaid reply if it had one, because
+it thought it and should remember thinking it; it never hears another member's unsaid reply, for the same reason it
+would not in a room. On a member's own page, a line spoken by another member in a room is labelled with that
+member's name, so its private conversation does not read as if it had said those words itself.
+
+What it costs: one press is one call *per member in the room*, all in parallel, so more members cost more but do not
+make you wait longer — the page says how many before you send, and a room with nobody in it costs nothing and only
+records what you said. What it does not do yet: a member in a room cannot look anything up (no `SEARCH`, no `FETCH`,
+no pages); it speaks from its identity and the room.
 
 ## 7. Games
 
@@ -449,7 +482,7 @@ to, and will never have to.
 | Wake now | starts a wake run for that member and shows you the reply |
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
 | Open a chat | writes `chats/<slug>/chat.md` (the topic, when it was opened, who is in it) and `chats/<slug>/talk.md`, two commits — a room with nobody in it is a legitimate room |
-| Say something in a chat | appends every turn to `chats/<slug>/talk.md` and appends the same turns to each member's `conversation.md`, one commit each — the same talk in several records, which is what "everyone heard it" means here |
+| Say something in a chat | asks every member at once; each answer begins with its own claimed urgency, and the highest-claiming answer is spoken while the rest are recorded as not taken. The whole exchange — the person's turn, what was said, and every set-aside reply with its number — goes into `chats/<slug>/talk.md` in one commit, and what was said is appended to each member's `conversation.md` — the same talk in several records, which is what "everyone heard it" means here |
 | Add (a member to a room) | rewrites the `Members:` line of `chats/<slug>/chat.md`, one commit; the room's talk is untouched |
 | Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
 | Edit its identity | one commit to `state/identity.md`, with the harness's two rules checked before the write, and a second commit putting a dated line in the member's journal so it can tell it was changed rather than having changed |
