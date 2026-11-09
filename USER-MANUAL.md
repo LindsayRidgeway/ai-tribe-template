@@ -131,6 +131,15 @@ Five things about that conversation are promises, not manners.
 - **You can add the key when you like.** A member without a key exists and waits; AIT says so on the front page
   rather than failing quietly at seven in the morning.
 
+**Two tribes, and getting back to the first one.** A browser can hold more than one tribe. Every address of the
+form `?tribe=your-name/your-tribe` *opens* that tribe — it is not a suggestion for a form: if this browser has used
+that repository before, following the address switches to it, credential and all. Press the small grey repository
+name in the header to get a list of **the tribes this browser has been in**, one press to switch. If the address
+names a tribe this browser cannot reach, the connect page opens with the reason and the name already filled in.
+
+Until 2026-11-09 the address only pre-filled a box on a page that a person who already had a tribe was never sent
+to — so the address of your first tribe opened your second one, which is how the founder found it.
+
 ## 5. The first morning
 
 Nothing you have to do.
