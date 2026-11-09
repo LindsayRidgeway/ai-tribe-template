@@ -195,6 +195,15 @@ anything. There is no *end session*: a talk lasts as long as the member does, ac
 the things *it* decided were worth keeping. Notes are quoted first and given priority over talk, because a member
 that remembered every word of yesterday and nothing it had learned would be a recording, not a colleague.
 
+**Its identity** is `state/identity.md`, and the page shows it in full with an **Edit this** button. That is the
+file a person most needs to be able to write: every prompt begins with it, nothing overrides it, and rewriting it
+is the fastest way to change who a member is — the founder's own seven lines turned a stiff dog into himself. Two
+rules are enforced in the box, copied from `tribe.py validate` rather than invented here: it must name its member as
+`member <name>`, and it must be longer than 100 characters. Break either and the page refuses to save and offers to
+put the missing line back for you; a page that accepts what the harness refuses is a page that breaks a member
+quietly. If the file changed underneath the box, it says so instead of overwriting. Every save is one commit, so
+every version of a member's conception of itself is still in git.
+
 **The shelf** is `state/memory.md` — its own retelling of its life, in the first person, which it may rewrite
 whenever you press **Retell its memory**. This is deliberate and it is the most human thing here: a person's memory
 is not a tape, it is a story told again, and it drifts. What keeps that honest is that the retelling sits *beside*
@@ -390,6 +399,7 @@ to, and will never have to.
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it |
 | Wake now | starts a wake run for that member and shows you the reply |
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
+| Edit its identity | one commit to `state/identity.md`, with the harness's two rules checked before the write |
 | Retell its memory | one call to the member's engine; it writes its life again from `state/journal.md` into `state/memory.md`, one commit, and the previous retelling stays in git |
 | Save this talk to its memory | asks the member what it wants kept from this talk and writes it into `state/journal.md` as an entry |
 | What it did to its own history | reads two versions of `state/memory.md` from git and shows you the word-level difference, plus which entries of the record barely survive into it |
