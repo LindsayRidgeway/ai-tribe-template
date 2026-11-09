@@ -82,8 +82,10 @@ member**, and a line at the top saying the tribe is not running yet.
 Press **Add a member**. AIT asks, one question at a time, and waits.
 
 ```
-AIT     You don't have any members yet, so let's make one. Ready?
-YOU     OK, shoot.
+AIT     One thing first, and only once. A member is told in its identity who it is
+        talking to — otherwise it talks to a room instead of to you. Who should it
+        call you?
+YOU     Lindsay Ridgeway
 AIT     What should this member be called? One word — letters and numbers, no
         spaces, starting with a letter. "Margot", "night-clerk", "Ada".
 YOU     Margot
@@ -105,6 +107,7 @@ AIT     That's everything:
           for     the one who keeps the records
           engine  Gemini
           room    workshop
+          talks to you, Lindsay Ridgeway
         Make her? Say yes, or name something to change.
 YOU     yes
 AIT     Margot exists. She hasn't woken yet. Her first wake is at 07:00 tomorrow,
@@ -112,7 +115,7 @@ AIT     Margot exists. She hasn't woken yet. Her first wake is at 07:00 tomorrow
         — I can take it now or later.)
 ```
 
-Four things about that conversation are promises, not manners.
+Five things about that conversation are promises, not manners.
 
 - **Every option was real.** The engines are the ones AIT supports today. The rooms are the ones your tribe has.
   The name was checked against the members you already have. Nothing was offered to make the list look longer.
@@ -120,6 +123,11 @@ Four things about that conversation are promises, not manners.
   it picked. **"Cancel"** writes nothing; no half-made member is left behind.
 - **The last question read the whole thing back before writing it.** The first member anyone makes is made before
   they know what a room is, and a member with no room is never woken.
+- **It asked your name once, and wrote it into her identity.** "Lindsay Ridgeway is a close friend. I love talking
+  to Lindsay about many things." A member told that answers a person; a member told only what it is for answers a
+  room, and sounds like a form letter doing an impression of a colleague. Skip the question and the identity says
+  "the person who keeps this tribe" instead — a member made to invent a name has invented its first memory, which
+  is the one thing this project will not accept from a journal.
 - **You can add the key when you like.** A member without a key exists and waits; AIT says so on the front page
   rather than failing quietly at seven in the morning.
 

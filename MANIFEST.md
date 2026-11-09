@@ -9,7 +9,7 @@ with a model improvising around the hole.
 
 | file | who writes it | what it is for |
 |---|---|---|
-| `state/identity.md` | member | who it is: name, seat, and the rule it holds itself to. Must name itself `member <name>`. |
+| `state/identity.md` | member | who it is: name, seat, **who it talks to**, and the rule it holds itself to. Must name itself `member <name>`. `tribe.py new` writes the first four from the seat and from the person's own name (`--person`); a member with no one named in it answers a room instead of a person, which is how Laddie came out stiff. |
 | `state/state.md` | harness | what it currently thinks. Exactly three lines are machinery: `Wakes so far:`, `Last wake:`, `Model used:` — the harness increments and stamps them. Edit the prose, never those three lines. |
 | `state/open-items.md` | member | numbered things it is trying to do. **Numbers must be unique** — the harness acts on one item per wake and takes the first match. |
 | `state/journal.md` | harness + member | **long-term memory.** What it did at each wake, and the notes it writes in conversation. Appended, never rewritten. Quoted first in the prompt and given priority over talk; a record the member cannot see is not a memory. |

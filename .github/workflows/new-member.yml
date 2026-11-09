@@ -44,6 +44,10 @@ on:
         description: "which world it stands in — leave blank when your colony has only one"
         required: false
         default: ""
+      person:
+        description: "you: the human this tribe belongs to, as you would write it — 'Lindsay Ridgeway'. It goes into the member's identity so it knows who it is talking to"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -72,6 +76,7 @@ jobs:
           ENGINE: ${{ inputs.engine }}
           MODEL: ${{ inputs.model }}
           PLACE: ${{ inputs.place }}
+          PERSON: ${{ inputs.person }}
         run: |
           set -euo pipefail
           # The worlds are folders under soil/, not a list in this file. A dropdown here would be a copy of
@@ -102,6 +107,7 @@ jobs:
             args=(--seat "$SEAT" --api "$ENGINE")
             [ -n "$MODEL" ] && args+=(--model "$MODEL")
             [ -n "$PLACE" ] && args+=(--place "$PLACE")
+            [ -n "$PERSON" ] && args+=(--person "$PERSON")
             python3 tribe.py new "$NAME" "${args[@]}" | tee /tmp/created.txt
           fi
 

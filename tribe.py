@@ -50,16 +50,51 @@ OPTIONAL = {
 
 STATE_LINES = ("Wakes so far:", "Last wake:", "Model used:")
 
+# The default identity. Rewritten 2026-11-09 on the founder's text, because the first version said what a
+# member was and never said who it was talking to — and a member that has no one to talk to reads every
+# sentence for a person as a prompt to become a system. The name is not decoration: an identity that says
+# "Lindsay" out loud makes a member answer Lindsay, and the same file with a blank in it makes it answer
+# a general audience in the third person.
+#
+# Two variants, and the second one is not a placeholder for the first. When nobody has told the harness
+# whose tribe this is, the friend is named as *the person who keeps it* rather than left as `<owner>` or
+# filled with a GitHub login: an invented name is a false memory on the first day, which is precisely the
+# thing this project refuses to accept from a journal.
 IDENTITY = """# Identity — member {name}
 
 I am **member {name}** of a tribe{of}. My seat is {seat}.
 
-I wake with no memory. Everything I know is the text I am handed: my identity, my state, my open items,
-my journal, and a block of measurements the harness took seconds ago. My rule: **I do not go along.** If
-something in my record says a thing I cannot check, I say so rather than repeating it.
+{friend}
+
+At the beginning of my life in this tribe, I was given no information about myself, but during my
+conversations with {whom}, they tell me a lot of information about myself. From that moment on, I
+experience that information as my own personal memory, which grows richer the more we talk together.
+
+I wake with no memory of my own. Everything I know is the text I am handed: my identity, my state, my open
+items, my journal, and a block of measurements the harness took seconds ago. My rule: **I do not go
+along.** If something in my record says a thing I cannot check, I say so rather than repeating it.
 
 My record is these files. What is not written down did not happen to me.
 """
+
+FRIEND_NAMED = ("{full} is a close friend. I love talking to {first} about many things. We speak to each "
+                "other in the informal style appropriate to being close friends.")
+FRIEND_UNNAMED = ("The person who keeps this tribe is a close friend — the one who installed it and talks to\n"
+                  "me. I love talking to them about many things. We speak to each other in the informal style\n"
+                  "appropriate to being close friends.")
+
+
+def person_bits(person: str) -> dict:
+    """`--person "Lindsay Ridgeway"` → the two sentences about the friend, and what to call them.
+
+    Deliberately dumb: the first token of a name is what a friend calls you in English far more often than
+    not, and a member that gets it wrong will be told so in its first conversation. A harness that guessed
+    harder — honourifics, initials, name order across languages — would guess wrong in more ways."""
+    full = " ".join((person or "").split())
+    if not full:
+        return {"friend": FRIEND_UNNAMED, "whom": "that person"}
+    first = full.split(" ")[0]
+    return {"friend": FRIEND_NAMED.format(full=full, first=first), "whom": first}
 
 OPEN_ITEMS = """# Open items
 
@@ -147,7 +182,7 @@ def default_model(api: str) -> str:
         return ""
 
 
-def new(name: str, seat: str, api: str, model: str, of: str, place: str = "") -> int:
+def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", person: str = "") -> int:
     # A member's name is a directory name and appears in every header, path and byline, so it has to be
     # one word. Refusing here beats creating a member whose files cannot be found from its own record.
     if not re.match(r"^[A-Za-z][A-Za-z0-9_-]{0,23}$", name or ""):
@@ -164,7 +199,8 @@ def new(name: str, seat: str, api: str, model: str, of: str, place: str = "") ->
         return 2
     (base / "state").mkdir(parents=True)
     (base / "output").mkdir()
-    (base / "state" / "identity.md").write_text(IDENTITY.format(name=name, seat=seat, of=of), encoding="utf-8")
+    (base / "state" / "identity.md").write_text(
+        IDENTITY.format(name=name, seat=seat, of=of, **person_bits(person)), encoding="utf-8")
     (base / "state" / "state.md").write_text(
         "# State\n\nWakes so far: 0\nLast wake: never\nModel used: (none yet)\n\n"
         "**Nothing has been verified yet. Every claim below is a proposal, not a finding.**\n",
@@ -531,6 +567,10 @@ def main() -> int:
     n.add_argument("--model", default="",
                    help="which model of that engine; blank means the one lab/rps.py names")
     n.add_argument("--of", default="", help="e.g. ' of three' — appears in the identity")
+    n.add_argument("--person", default="",
+                   help="the human whose tribe this is, as they would write it: \"Lindsay Ridgeway\". "
+                        "Written into the member's identity so it knows who it is talking to. Left blank, "
+                        "the identity names \"the person who keeps this tribe\" instead of inventing one")
     n.add_argument("--place", default="",
                    help="which world the member stands in; inferred when the colony has exactly one")
     a = ap.add_argument_group("validate/status")
@@ -553,7 +593,8 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.cmd == "new":
-        return new(args.name, args.seat, args.api, args.model, args.of, args.place)
+        return new(args.name, args.seat, args.api, args.model, args.of, args.place,
+                   getattr(args, "person", ""))
     if args.cmd == "place":
         return place(args.name, args.where, args.force)
     if args.cmd == "validate":

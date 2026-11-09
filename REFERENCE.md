@@ -93,7 +93,7 @@ at the next wake and you will think you changed something when you did not.
 | `talk.sh` | the manual wake: ask one member one question from a terminal, or from a Goose window opened in this folder |
 | `lab/chat.py` + `chat.html` | a conversation page in a browser, if you want one: drop list, two boxes, reachable from a phone on the same wifi. Each message is a real wake. Not needed by anyone who can run Goose |
 | `tribe.py` | makes a new member's folder; validates names; refuses nonsense |
-| `.github/workflows/new-member.yml` | the same command as a form: name, seat, engine. Adds a member without a terminal. |
+| `.github/workflows/new-member.yml` | the same command as a form: name, seat, engine, and who you are. Adds a member without a terminal. The `person` field goes into the new member's identity as `"Lindsay Ridgeway is a close friend"` — left blank, the identity names "the person who keeps this tribe" rather than inventing a name. |
 | `.github/workflows/season.yml` | a tennis session as a form: season, two participants, how many rallies. |
 | `.github/workflows/interactive.yml` | a question in an issue, answered in the same thread by the participant it names |
 
