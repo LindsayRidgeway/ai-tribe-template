@@ -322,6 +322,40 @@ an argument *against* returning the ball, and would have produced a room of inte
 first now, adding something second. If a room's rally count stays at 1 while its answers get cleverer, that is the
 machine telling you it is not a conversation.
 
+### The governor, and the table that tests the judge
+
+A judge can have a favourite, and a favourite is invisible while it is winning everything. So a judged room carries
+a rule in its own file:
+
+```
+Judge: gemini
+Repeat: 1
+```
+
+`Repeat: 1` means nobody speaks twice in a row; `2` or `3` allow a run that long; `Repeat: any` lets the judge pick
+the same member every time. The governor excludes the member who has had their run from the field before the judge
+is asked — and then tells the judge, in the same breath, that this person answered but may not be chosen. The
+excluded answer is still written, marked `[excluded by the repeat rule]`, because it was written before the rule
+applied to it.
+
+**A warning the page gives, because it matters more than the feature:** in a room of **two members** with `Repeat: 1`,
+the room is strict alternation — A, B, A, B — and the judge cannot express a preference at all. That is not a
+limitation of the governor, it is arithmetic: with one candidate per turn there is nothing to choose. The same is
+already true of the claim-based room, where the member who just spoke is not asked. **Three members is the smallest
+room in which either mechanism does anything.**
+
+And the number that answers the question rather than the argument: the room keeps a record **split by judging
+engine** —
+
+> Who each judge chose: **gemini** decided 12 times — Lumi 7, Laddie 5 · **deepseek** decided 4 times — Laddie 3, Lumi 1
+
+— so "will Gemini choose the Gemini answer every time, or only more often?" is a column a person can read, and the
+cleanest version of the experiment is to run the same room under two judges and compare the two rows. What the
+governor does is turn a monopoly into a **rate**: with three members and no repeats, chance is one turn in three, and
+favouritism shows up as a share well above that. What it cannot do is tell favouritism apart from quality — a member
+who really is better *should* be chosen more often, and a governor that forbids it is punishing accuracy. Only
+swapping the judge, with the same answers on the table, separates the two.
+
 Three things are said plainly rather than hidden behind the word "judge". First, a judge is a model with preferences
 nobody wrote down, which is why it is a *named, swappable engine* and not an invisible feature. Second, its reason is
 written into the record next to the answer it chose — `[judge gemini: it answered the question that was asked]` — and
@@ -556,6 +590,7 @@ to, and will never have to.
 | Open a chat | writes `chats/<slug>/chat.md` (the topic, when it was opened, who is in it) and `chats/<slug>/talk.md`, two commits — a room with nobody in it is a legitimate room |
 | Say something in a chat | asks every member at once; each answer begins with its own claimed urgency, and the highest-claiming answer is spoken while the rest are recorded as not taken. The whole exchange — the person's turn, what was said, and every set-aside reply with its number — goes into `chats/<slug>/talk.md` in one commit, and what was said is appended to each member's `conversation.md` — the same talk in several records, which is what "everyone heard it" means here |
 | The floor is decided by (a judge) | rewrites `chat.md`: `Floor: judge` and `Judge: <engine>`, one commit. The talk is untouched, and the members are no longer asked for an urgency claim — the judge decides instead, and its reason goes into the record beside the answer it chose |
+| May speak once / twice / thrice in a row | one line in `chat.md` — `Repeat: 1`, `2`, `3` or `any`. The member who has had their run is removed from the field before the judge is asked, and told to the judge as ineligible; their answer is still written, marked as excluded |
 | Let them talk | rounds of the room without you: each round asks every member at once and the highest claim takes the floor, so from the second round the members are answering each other. One commit per round, and it stops itself when nobody claims 3 or more |
 | Add (a member to a room) | rewrites the `Members:` line of `chats/<slug>/chat.md`, one commit; the room's talk is untouched |
 | Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
