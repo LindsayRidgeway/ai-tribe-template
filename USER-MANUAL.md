@@ -183,6 +183,26 @@ an hour you spent talking, that left nothing in the record, did not happen to it
 every exchange is a call. AIT counts while you talk, and you can stop at any point without losing what is already
 written down.
 
+### Its memory, which is the part that is not a chat app
+
+A member has two memories and one shelf, and they are three different files.
+
+**Its short-term memory** is the talk you are having. The newest turns are kept and the oldest fall out as the
+conversation goes on, and the whole of it lives in `state/conversation.md` — which is why a reload does not end
+anything. There is no *end session*: a talk lasts as long as the member does, across reloads, browsers and years.
+
+**Its long-term memory** is `state/journal.md`: what it did at each wake, and the notes it writes in conversation —
+the things *it* decided were worth keeping. Notes are quoted first and given priority over talk, because a member
+that remembered every word of yesterday and nothing it had learned would be a recording, not a colleague.
+
+**The shelf** is `state/memory.md` — its own retelling of its life, in the first person, which it may rewrite
+whenever you press **Retell its memory**. This is deliberate and it is the most human thing here: a person's memory
+is not a tape, it is a story told again, and it drifts. What keeps that honest is that the retelling sits *beside*
+the journal rather than instead of it. The record never changes. Git keeps every earlier retelling. And the page
+shows you the difference: what words changed since the last time it told its story, how much of the record survives
+into it, and which entries it has quietly left out. That panel cannot tell you whether a sentence in the retelling
+is true — no word count settles that — but it shows you what moved, so a person can check the record beside it.
+
 **When you want tools of a different order** — a shell, a compiler, a search across the whole disk, an hour of work
 on one problem — there is a **companion**: Goose, free, which opens a member's session on your own machine with
 tools on. AIT hands it the recipe in one click from the member's page. Two honest warnings: it is an install, and it
@@ -369,7 +389,10 @@ to, and will never have to.
 |---|---|
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it |
 | Wake now | starts a wake run for that member and shows you the reply |
-| Say something in chat | a direct call to the engine from this page, answered as it is written; when the conversation ends, the member's diary entry and anything it filed are committed |
+| Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
+| Retell its memory | one call to the member's engine; it writes its life again from `state/journal.md` into `state/memory.md`, one commit, and the previous retelling stays in git |
+| Save this talk to its memory | asks the member what it wants kept from this talk and writes it into `state/journal.md` as an entry |
+| What it did to its own history | reads two versions of `state/memory.md` from git and shows you the word-level difference, plus which entries of the record barely survive into it |
 | Ask for a check | runs the read-only checker on that member's requests and writes the results into its findings |
 | Play a session | starts a tennis or putting run with the players, court and count you chose; the result is committed under the game's records |
 | Ask for a picture | calls the engine that paints, files the image and a credit card naming the maker, and commits both |
