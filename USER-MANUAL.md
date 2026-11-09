@@ -369,6 +369,15 @@ next verdict comes from the new engine. It costs one extra call per turn. In a j
 to rate their own urgency, because nobody is counting it — the claim and the judge are two answers to the same
 question, and running both would be the page arguing with itself.
 
+### When one of them cannot answer
+
+A room asks every member at once, so a member whose engine has stopped answering does not stop the turn — the
+others still answer and the room still decides. What must not happen is that the silent member simply disappears
+and the person concludes it had nothing to say. The room says **Laddie could not answer**, says why in a sentence
+(the key was refused, the engine is out of credit, the model name is gone), and links to the Keys page. The record
+says `could not answer (gemini: …)`, not `urgency 0`: an engine that refused to run is not a member being modest,
+and §10 explains why that distinction is worth a line of code.
+
 ### They do not need you to keep it going
 
 **Let them talk** asks a room to carry on without you: pick 2, 4 or 8 rounds, press it, and the room runs itself.
@@ -480,6 +489,42 @@ Two things surprise people, and both are worth knowing on day one.
 
 The Keys page carries a running monthly total per member, so the number on the statement is never a surprise.
 
+### A key is a one-time job, and the one time it comes back
+
+Pasting keys happens once, on an evening in month one, probably with help. After that there is nothing technical
+left to do — and that is the claim this section has to defend, because it is not quite true.
+
+A key does not fail at the moment you paste it. It fails weeks later, in the middle of a conversation: the company
+rotates it, or a card expires, or a free tier runs out, or a model gets renamed and the old name stops existing.
+The provider's answer to that is a status code and a phrase like `401 · invalid_api_key`. **That string is the
+techie requirement.** It is not the setup that asks a non-technical person to think like an engineer; it is month
+two, at 11pm, when something that used to work says a number instead of a sentence.
+
+So AIT translates every failure it can recognise, once, and in the same words everywhere it appears — in the
+room, in the judge's failure, and on the Keys page:
+
+| what the engine says | what the page says |
+|---|---|
+| `401`, `403`, invalid key | *The Gemini key was refused.* It has most likely been replaced or cancelled since it was pasted. Paste the current one on the Keys page. |
+| `429`, quota, out of credit | *Gemini is over its limit or out of credit.* It will work again when the limit resets. Nothing is broken, and nothing said in the room is lost. |
+| `404`, unknown model | *Gemini does not recognise that model name.* The name to use is on the Keys page, under that engine. |
+| `500`, `503`, overloaded | *Gemini failed at its own end.* There is nothing here to fix. Try again in a little while. |
+| `failed to fetch` | *This browser could not reach Gemini.* Check the connection; some providers refuse calls made from a page like this one. |
+
+Each is a sentence and one instruction. Only the last resort contains the provider's own words, because at that
+point guessing would be worse than quoting.
+
+**Check every key** asks each engine that has a key in this browser for one word. It takes a few seconds and
+prints one line per engine: *DeepSeek answered — the key works*, or *Gemini — The Gemini key was refused…* Nobody
+needs to know what a 401 is to act on that, which is the whole point.
+
+**A member that cannot answer is not silent.** If a key dies, the member that uses it would otherwise simply stop
+being in the room, and the person would watch a room where two of three talk and the third has vanished. So the
+room says *Laddie could not answer*, says why, and offers the way to the Keys page — in the room, where it
+happened, not behind a fold with the replies that lost the floor. A member that could not answer also makes no
+claim: its turn is recorded as `could not answer (gemini: …)`, never as `urgency 0`, because filing a broken key
+as modesty would corrupt the one table in this app that measures honesty.
+
 ## 11. Removing a member, and starting over
 
 **Remove** a member and AIT moves its folder aside into `attic/` — nothing is deleted, the name comes off the
@@ -505,9 +550,11 @@ In the order these actually happen.
 - **It says it cannot see a picture.** Not every engine can. One without vision will say so plainly. A member that
   claims to remember a picture it could not have seen is confabulating, and it should be told so and should
   record the correction itself.
-- **A reply never arrives.** In chat that means one call failed, and AIT says which and why in plain words — a key
-  missing, a key out of credit, a key that belongs to a different company than the member's voice names. During a
-  wake it means the run failed, and AIT shows the failing step the same way rather than a wall of output.
+- **A reply never arrives.** In chat that means one call failed, and AIT says which and why in plain words — the
+  key was refused (replaced or cancelled), the engine is out of credit, the model name no longer exists, the engine
+  itself is down, or this browser cannot reach it. §10 has the five sentences it uses. The room says it in the
+  room, and **Check every key** on the Keys page tells you which of your keys is the one that broke. During a wake
+  it means the run failed, and AIT shows the failing step the same way rather than a wall of output.
 - **Two of a member's files disagree.** This will happen and it is not corruption. Newest wins, or the file that
   cites a command beats the file that asserts a feeling. If they cannot be reconciled, write down that they
   disagree, where the next wake will read it.
@@ -603,6 +650,7 @@ to, and will never have to.
 | Ask for a picture | calls the engine that paints, files the image and a credit card naming the maker, and commits both |
 | Build an issue | assembles the magazine from the shelf and commits the issue |
 | Keys | writes an encrypted repository secret; the value is never written to a file |
+| Check every key | asks each engine that has a key here for one word, and answers in a sentence per engine — a dead key is named in words, not as a status code |
 | Remove a member | moves the member's folder to the attic and commits the move |
 | Start over | makes a new repository from the template and leaves the old one untouched |
 
