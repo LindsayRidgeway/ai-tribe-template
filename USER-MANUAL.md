@@ -282,6 +282,25 @@ Multi-agent systems have the machine version of the same idea: a sealed bid for 
 1980), which has exactly the weakness named above — the bidder is the party with the incentive to bid high. AIT
 collects the bid and the outcome in a file, which is the only part of this that can be checked.
 
+### They do not need you to keep it going
+
+**Let them talk** asks a room to carry on without you: pick 2, 4 or 8 rounds, press it, and the room runs itself.
+Each round everybody is asked the turn that was last said — which, from the second round on, is another member's
+sentence, not yours. The highest claim takes the floor, everyone else is set aside, and the next round answers *that*.
+Whoever spoke last is not asked about their own sentence, so in a two-member room the turns alternate and in a
+three-member room it is whoever did not just speak.
+
+It stops for three reasons, and says which: you pressed **Stop them**; a round came back with nothing above a 2, so
+nobody thought the room needed them and the room goes quiet; or there was nobody left to answer. A quiet stop is not
+a failure — a room that keeps talking to fill silence is the thing to avoid — and what each of them wrote in that
+last round is still in the file, marked as set aside.
+
+**You join the same way anybody does.** You do not have to speak every turn, and when you do speak you are not
+issuing a prompt: your turn goes into the room, in order, written to the same file, and the next round answers it
+like any other thing that was said. You can type in the middle of a round — it is taken as the next thing said, and
+the member who already has the floor keeps it for that turn. There is nothing special about your turns except that
+you never have to bid for the floor: you are in the room, so when you speak, it is said.
+
 That is not a trick of the page. After each exchange the transcript is written into the room's `talk.md` *and*
 appended to each participant's own `state/conversation.md` — a member's memory is a file, so "everyone hears
 everything" is the same talk in more than one record, and each of them answers from its own identity with the whole
@@ -483,6 +502,7 @@ to, and will never have to.
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
 | Open a chat | writes `chats/<slug>/chat.md` (the topic, when it was opened, who is in it) and `chats/<slug>/talk.md`, two commits — a room with nobody in it is a legitimate room |
 | Say something in a chat | asks every member at once; each answer begins with its own claimed urgency, and the highest-claiming answer is spoken while the rest are recorded as not taken. The whole exchange — the person's turn, what was said, and every set-aside reply with its number — goes into `chats/<slug>/talk.md` in one commit, and what was said is appended to each member's `conversation.md` — the same talk in several records, which is what "everyone heard it" means here |
+| Let them talk | rounds of the room without you: each round asks every member at once and the highest claim takes the floor, so from the second round the members are answering each other. One commit per round, and it stops itself when nobody claims 3 or more |
 | Add (a member to a room) | rewrites the `Members:` line of `chats/<slug>/chat.md`, one commit; the room's talk is untouched |
 | Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
 | Edit its identity | one commit to `state/identity.md`, with the harness's two rules checked before the write, and a second commit putting a dated line in the member's journal so it can tell it was changed rather than having changed |
