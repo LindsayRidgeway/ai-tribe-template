@@ -300,6 +300,28 @@ already have; is it in its own voice rather than a summary of the others. It is 
 that it must not choose to be even-handed. It may also answer **nobody** — if every answer is restatement, agreement
 or noise, it says so instead of picking the least bad one, and the room goes quiet.
 
+### The ball
+
+A conversation between two people has a third thing in it that a chat window does not: something being passed
+back and forth. In one-on-one chat you are the ball — everything returns to you, and the model is a wall with a
+good memory. In a room, the ball can go between the members, and that is the whole reason to have more than one.
+
+So in a judged room the judge is asked one question before any of the others: **did this answer return the ball** —
+did it take up something specific from what was last said and move that thing on, or did it start a new subject,
+restate the room, or ignore what it was answering. A shot that ignores where the ball is has missed, however good
+the shot. Its verdict is recorded: `[judge gemini, returned: took up the objection and made it stronger]` or
+`[judge gemini, dropped: new subject]`, and the room counts the rally — consecutive answers that came back, with
+the longest run in that room beside the current one.
+
+Two dropped balls in a row ends a room that is running itself, because one dropped ball is a change of subject and
+two is a room that has stopped listening to itself. That is a tennis rule, not a chat rule, and it is the reason
+the count is worth keeping.
+
+Note what this does to the judge's brief: it used to be told to prefer the answer that adds something new, which is
+an argument *against* returning the ball, and would have produced a room of interesting monologues. Returning comes
+first now, adding something second. If a room's rally count stays at 1 while its answers get cleverer, that is the
+machine telling you it is not a conversation.
+
 Three things are said plainly rather than hidden behind the word "judge". First, a judge is a model with preferences
 nobody wrote down, which is why it is a *named, swappable engine* and not an invisible feature. Second, its reason is
 written into the record next to the answer it chose — `[judge gemini: it answered the question that was asked]` — and
