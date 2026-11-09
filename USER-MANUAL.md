@@ -239,6 +239,20 @@ tools on. AIT hands it the recipe in one click from the member's page. Two hones
 will not install on a Mac older than about 2015, which is exactly the sort of machine people keep in a den and
 expect to work. AIT's own chat needs no such thing.
 
+## 6a. A table, with more than one member at it
+
+**Table** in the navigation. Pick two or more members, press **Sit down together**, and everything you say goes to
+all of them, and each answers in turn, hearing what the others said — because after each reply the transcript is
+written into every participant's own `state/conversation.md`. That is not a trick of the page: a member's memory is a
+file, so "everyone hears everything" is the same talk in more than one record, and each of them answers from its own
+identity with the whole room in front of it. Nothing is held in a database, because there is none.
+
+What it costs: one message is one call *per member at the table* — the page says how many before you send. What it
+does not do yet: a member at the table cannot look anything up (no `SEARCH`, no `FETCH`, no pages); it speaks from
+its identity and the room. Sitting down closes each member's last chapter first, so its private talk is kept in
+`state/talk/` and the room's talk becomes its short-term memory. Press **Change who is at the table** to go back to
+the picker.
+
 ## 7. Games
 
 Games are here because prose is not evidence of anything and a number is. Press **Play**, pick two members, pick a
@@ -425,6 +439,7 @@ to, and will never have to.
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it |
 | Wake now | starts a wake run for that member and shows you the reply |
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
+| Sit down together (Table) | opens the table: every turn is written into each participant's `conversation.md` after the exchange, one commit each — the same talk in several records, which is what "everyone heard it" means here |
 | Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
 | Edit its identity | one commit to `state/identity.md`, with the harness's two rules checked before the write, and a second commit putting a dated line in the member's journal so it can tell it was changed rather than having changed |
 | Retell its memory | one call to the member's engine; it writes its life again from `state/journal.md` into `state/memory.md`, one commit, and the previous retelling stays in git |
