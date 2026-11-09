@@ -204,6 +204,14 @@ anything. There is no *end session*: a talk lasts as long as the member does, ac
 the things *it* decided were worth keeping. Notes are quoted first and given priority over talk, because a member
 that remembered every word of yesterday and nothing it had learned would be a recording, not a colleague.
 
+**Its chapters.** A talk has no end here, so the live conversation cannot grow forever — but rolling it used to
+*discard* the oldest turns, which meant a long conversation left a thinner record than a short one. Now what falls
+out of the live window is written to `state/talk/`, one file per chapter, in the order it was said: not a summary,
+not a retelling, the talk itself. The page lists them with a search box, and **Start a new chapter** closes the live
+window into the chapter and gives you a clean page — the record grows by exactly what the page let go of. The member
+can search the chapters too (`READ: search <words>`), which is the nearest thing to a person being reminded of
+something by a word rather than by a date.
+
 **Its identity** is `state/identity.md`, and the page shows it in full with an **Edit this** button. That is the
 file a person most needs to be able to write: every prompt begins with it, nothing overrides it, and rewriting it
 is the fastest way to change who a member is — the founder's own seven lines turned a stiff dog into himself. Two
@@ -396,9 +404,14 @@ manual. One line each, in the order the chapters need them.
 8. **Picture requests** (§8) — the harness can do this now, from a command; the page cannot ask.
 9. **The issue builder** (§9) — the magazine assembles from a command; there is no button and no preview.
 10. **The Keys page and the monthly total** (§10) — keys are set by hand today, and nothing sums them.
-11. **The attic** (§11) — no removal path exists at all today, and that is the honest state: it was left
+11. **Pictures in a conversation** — asked for 2026-11-09. Some engines read images and some do not, so an
+   attachment has to travel as a file in the repository plus a note in the message saying which engine can see it,
+   and the page must say plainly when a member is being asked about a picture it cannot see. Nothing of this exists:
+   the chat is text in, text out. And it is not a small thing — an image in the record needs a size cap, a commit
+   per picture, and an honest refusal in front of every member whose model has no eyes.
+12. **The attic** (§11) — no removal path exists at all today, and that is the honest state: it was left
     unbuilt on purpose and is now the first thing a mistaken first member needs.
-12. **Plain-language failures** (§12) — today a failure is a log, and a log is exactly what this manual exists to
+13. **Plain-language failures** (§12) — today a failure is a log, and a log is exactly what this manual exists to
     hide.
 
 ## Appendix — every button, and the thing it does underneath
@@ -412,6 +425,7 @@ to, and will never have to.
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it |
 | Wake now | starts a wake run for that member and shows you the reply |
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
+| Start a new chapter | moves every turn in the live window into `state/talk/<chapter>.md` and empties `conversation.md`, in one commit each — nothing said is lost, only moved out of the window |
 | Edit its identity | one commit to `state/identity.md`, with the harness's two rules checked before the write, and a second commit putting a dated line in the member's journal so it can tell it was changed rather than having changed |
 | Retell its memory | one call to the member's engine; it writes its life again from `state/journal.md` into `state/memory.md`, one commit, and the previous retelling stays in git |
 | Save this talk to its memory | asks the member what it wants kept from this talk and writes it into `state/journal.md` as an entry |
