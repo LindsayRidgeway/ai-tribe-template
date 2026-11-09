@@ -12,8 +12,9 @@ with a model improvising around the hole.
 | `state/identity.md` | member | who it is: name, seat, and the rule it holds itself to. Must name itself `member <name>`. |
 | `state/state.md` | harness | what it currently thinks. Exactly three lines are machinery: `Wakes so far:`, `Last wake:`, `Model used:` — the harness increments and stamps them. Edit the prose, never those three lines. |
 | `state/open-items.md` | member | numbered things it is trying to do. **Numbers must be unique** — the harness acts on one item per wake and takes the first match. |
-| `state/journal.md` | harness + member | what it did at each wake. Appended, never rewritten. It is read back into the prompt as the member's own memory; a record the member cannot see is not a memory. |
-| `state/conversation.md` | AIT, while it is open | the recent talk with a person, rolled: the newest turns are kept and the oldest fall out, because a conversation is not a memory by being held. What the member wants to keep past the roll it writes into `journal.md` as a note, and the prompt gives those notes priority over talk. Not a session: the file persists, so a talk lasts as long as the member does. |
+| `state/journal.md` | harness + member | **long-term memory.** What it did at each wake, and the notes it writes in conversation. Appended, never rewritten. Quoted first in the prompt and given priority over talk; a record the member cannot see is not a memory. |
+| `state/memory.md` | member, at the harness's asking | **long-term memory, retold.** The member's own account of its life, written in the first person from the record and rewritten whole each time it is asked again — so it may compress, connect, simplify, even be wrong, the way a person's memory is. It is quoted before the journal precisely because it is the member's own version. What keeps this from erasing the evidence is that it sits *beside* `journal.md`, not instead of it: the record never changes, git keeps every earlier retelling, and a retelling can always be compared against what it was made from. Drift stops being a threat and becomes the measurement. |
+| `state/conversation.md` | AIT, while it is open | **short-term memory.** The recent talk with a person, rolled: the newest turns are kept and the oldest fall out, because a conversation is not a memory by being held. What the member wants to keep past the roll it writes into `journal.md` as a note, and the prompt gives those notes priority over talk. Not a session: the file persists, so a talk lasts as long as the member does. |
 | `state/voice.md` | human | `api:` and `model:` — the model it borrows. Changing this does not make it someone else. |
 | `state/requests.md` | member | read-only checks it wants run before its next wake (five at most, `ls`/`wc`/`sha256sum`/`shasum`/`date`/`git log|show|diff`). |
 | `state/findings.md` | harness | what those checks said. Consumed requests are cleared. |
@@ -35,6 +36,8 @@ by reading the diff.
 ## What is not in the schema, and should be
 
 - No version field. A member created by an older layout is not distinguishable from a broken one.
-- No size limit on the journal. It is truncated to the last 4,000 characters in the prompt, so a long
-  journal silently becomes a short memory — which is a design decision, but nothing states it in the file.
+- No size limit on the journal. The prompt hands the member a character budget instead (`CHAT_CHARS`, half of
+  it to memory) and quotes the newest end, so a long journal silently becomes a short memory — which is a
+  design decision, but the file itself does not state it. `state/memory.md` is now the pressure valve: the
+  member's retelling is bounded, the record that feeds it is not.
 - No check that `open-items.md` has anything to act on, only that its numbers are unique.
