@@ -163,7 +163,11 @@ jobs:
             api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
             model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
             echo "=== $who in $place — no instructions, model $model ($turnwhy) ===" | tee -a /tmp/clock.log
-            before="$(ls "wake/members/$who/output"/raw-*.json 2>/dev/null | wc -l)"
+            # Counted with find, not `ls | wc -l`, because the first wake of a member has no output yet: `ls`
+            # exits 2 on a glob that matches nothing, and `set -euo pipefail` turns that into the death of the
+            # whole step. Measured 2026-11-09 in a fresh tribe: the clock printed "=== Laddie in workshop ==="
+            # and exited 2 before the member was ever called. The first wake in every new tribe was impossible.
+            before="$(find "wake/members/$who/output" -maxdepth 1 -name 'raw-*.json' 2>/dev/null | wc -l || true)"
             handed=""
             if [ -n "${{ inputs.hand_member }}" ] && [ "$who" = "${{ inputs.hand_member }}" ] \
                && [ -n "${{ inputs.hand_work }}" ]; then
@@ -186,7 +190,7 @@ jobs:
             # unchanged, and the old test read that as "wrote nothing" and threw the second reply away
             # — a work written and never filed. A raw reply exists once per wake, so it cannot lie in
             # either direction: a failed wake adds none, an overwriting wake adds one.
-            after="$(ls "wake/members/$who/output"/raw-*.json 2>/dev/null | wc -l)"
+            after="$(find "wake/members/$who/output" -maxdepth 1 -name 'raw-*.json' 2>/dev/null | wc -l || true)"
             newest="$(ls -t "wake/members/$who/output"/raw-*.json 2>/dev/null | head -1 || true)"
             if [ "$after" -gt "$before" ]; then
               python3 file_work.py --member "$who" --issue "$issue" --raw "$newest" >> /tmp/clock.log 2>&1 || true
