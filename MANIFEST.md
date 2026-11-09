@@ -13,6 +13,7 @@ with a model improvising around the hole.
 | `state/state.md` | harness | what it currently thinks. Exactly three lines are machinery: `Wakes so far:`, `Last wake:`, `Model used:` — the harness increments and stamps them. Edit the prose, never those three lines. |
 | `state/open-items.md` | member | numbered things it is trying to do. **Numbers must be unique** — the harness acts on one item per wake and takes the first match. |
 | `state/journal.md` | harness + member | what it did at each wake. Appended, never rewritten. It is read back into the prompt as the member's own memory; a record the member cannot see is not a memory. |
+| `state/conversation.md` | AIT, while it is open | the recent talk with a person, rolled: the newest turns are kept and the oldest fall out, because a conversation is not a memory by being held. What the member wants to keep past the roll it writes into `journal.md` as a note, and the prompt gives those notes priority over talk. Not a session: the file persists, so a talk lasts as long as the member does. |
 | `state/voice.md` | human | `api:` and `model:` — the model it borrows. Changing this does not make it someone else. |
 | `state/requests.md` | member | read-only checks it wants run before its next wake (five at most, `ls`/`wc`/`sha256sum`/`shasum`/`date`/`git log|show|diff`). |
 | `state/findings.md` | harness | what those checks said. Consumed requests are cleared. |
