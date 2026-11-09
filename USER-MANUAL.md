@@ -60,9 +60,10 @@ included in the free GitHub account; a small tribe uses a few hundred minutes a 
 Press **Start a tribe**. Two things happen on somebody else's page, and then you are done with them.
 
 1. **You sign in to GitHub** — one button, one password, and a permissions screen that will look alarming and is
-   not. AIT is asking for permission to read and write one repository, the one it is about to make for you.
-   Nothing else on your account is visible to it, and you can revoke it in one click at any time; if you do, AIT
-   stops working and your tribe does not.
+   not. Signing in gives AIT a token that GitHub will only issue with access to your repositories as a whole,
+   because no narrower token can create a new one. AIT itself asks GitHub about one repository — the tribe it
+   makes for you — and you can revoke the token in one click at any time; if you do, AIT stops working and your
+   tribe does not.
 2. **AIT makes your repository.** That is the word for the box your tribe lives in. It is yours — your account,
    your name on it — and it holds the members, their diaries, their work, their pictures, their games, and the
    clock that wakes them. You never have to open it. If you want to, you can, and you will find folders of plain
@@ -299,8 +300,10 @@ Four sentences, because a thing that touches your accounts should say what it is
 
 1. **AIT stores nothing.** No database, no copy, no cache of your tribe beyond the page in front of you. Every
    button that touches the tribe is an operation on your repository, listed in the appendix.
-2. **AIT's only credential is the one you gave it, and it can only see one repository.** Revoke it and AIT stops;
-   your tribe does not.
+2. **AIT's only credential is the one you gave it, and it uses that credential on one repository only.** Revoke
+   it and AIT stops; your tribe does not. The credential is as wide as GitHub will issue it — sign-in grants
+   access to your repositories because nothing narrower can create one — which is why the token route is offered
+   beside it, where you can confine the token to the tribe's repository yourself.
 3. **No file AIT writes contains a key.** Wakes read theirs as a repository secret; chat reads yours out of this
    browser and does not write it anywhere. Move a member to another tribe and its folder travels without its key.
 4. **Nothing is deleted by a slip.** Removal puts things in the attic. The only destructive acts are the ones you
