@@ -1,0 +1,97 @@
+name: attic
+
+# Put a member away, or bring one back, from a browser.
+#
+# §11 of the manual has promised this since the manual was written: "Remove a member and AIT moves its folder
+# aside into attic/ — nothing is deleted". It was a promise with no code behind it, and a person who had just
+# made a member to try the thing out had no way to undo it. This is that way, and it is deliberately half a
+# feature: it moves, it never deletes. A member is a record of something that happened, and it should not be
+# erasable by a misheard word or a misclicked button.
+#
+# `git mv` rather than `rm`: the folder keeps every file it had, and the move is one commit that can be read.
+
+on:
+  workflow_dispatch:
+    inputs:
+      member:
+        description: "the member to put away (its folder moves to attic/, nothing is deleted)"
+        required: false
+        default: ""
+      back:
+        description: "an attic folder to bring back, e.g. Maud-20261109T231500Z — leave member blank"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attic
+  cancel-in-progress: false
+
+jobs:
+  attic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Put away, or bring back
+        env:
+          MEMBER: ${{ inputs.member }}
+          BACK: ${{ inputs.back }}
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          mkdir -p attic
+          if [ -n "${BACK:-}" ]; then
+            # Bring back: the folder name is the member's name plus the stamp it was put away with.
+            [ -d "attic/${BACK}" ] || { echo "::error::no attic folder called ${BACK} — the ones here are:"; ls -1 attic; exit 2; }
+            name="$(printf '%s' "$BACK" | sed -E 's/-[0-9]{8}T[0-9]{6}Z$//')"
+            [ -d "wake/members/${name}" ] && { echo "::error::there is already a member called ${name}"; exit 2; }
+            git mv "attic/${BACK}" "wake/members/${name}"
+            echo "brought ${name} back from the attic"
+            echo "ACTION=brought ${name} back" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          [ -n "${MEMBER:-}" ] || { echo "::error::name a member to put away, or an attic folder to bring back"; exit 2; }
+          [ -d "wake/members/${MEMBER}" ] || {
+            echo "::error::there is no member called ${MEMBER} here. The members are:"
+            ls -1 wake/members 2>/dev/null || true
+            exit 2
+          }
+          git mv "wake/members/${MEMBER}" "attic/${MEMBER}-${stamp}"
+          {
+            echo "# Why this one is in the attic"
+            echo
+            echo "${MEMBER} was put away on ${stamp} by whoever keeps this tribe, from AIT's own Members page."
+            echo "Nothing was deleted. Every file it had is in this folder, in the same shape it was in."
+            echo "To bring it back: AIT → Members → the attic, or run this workflow with"
+            echo "\`back: ${MEMBER}-${stamp}\`."
+          } > "attic/${MEMBER}-${stamp}/WHY.md"
+          echo "put ${MEMBER} in the attic as ${MEMBER}-${stamp}"
+          echo "ACTION=put ${MEMBER} in the attic" >> "$GITHUB_ENV"
+
+      - name: Publish the member list, so every drop list follows
+        run: |
+          set -euo pipefail
+          python3 lab/members.py --write
+          python3 lab/members.py --check
+
+      - name: Commit it to the record
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "attic: ${ACTION}"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }

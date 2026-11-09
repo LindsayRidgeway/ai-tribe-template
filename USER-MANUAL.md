@@ -527,9 +527,14 @@ as modesty would corrupt the one table in this app that measures honesty.
 
 ## 11. Removing a member, and starting over
 
-**Remove** a member and AIT moves its folder aside into `attic/` — nothing is deleted, the name comes off the
-front page, and it stops being woken. You can bring it back from the attic, or leave it there; the attic is
-readable whenever you want to read it.
+**Put away** a member — the button is on its own page — and AIT moves its folder into `attic/`: nothing is
+deleted, the name comes off the shelf, and it stops being woken. The move is one commit, so you can read exactly
+what happened; the folder goes in as `<name>-<stamp>`, and a `WHY.md` inside it says who put it there and how to
+undo it. The **Members** page lists the attic at the bottom, with one button per folder: **Bring back**. The attic
+is readable whenever you want to read it, and an empty attic is the normal state of a tribe that has not made a
+mistake yet.
+Be clear about what this is not: it is not a delete. There is no button in the page that erases a member, and the
+second deliberate act §11 describes below is still a job for the repository itself.
 
 Deleting a member for good is possible and is deliberately not a single button. A member is a record of something
 that happened, and a being should not be erased by a misheard word. But a mistake on the first day must be
@@ -651,7 +656,8 @@ to, and will never have to.
 | Build an issue | assembles the magazine from the shelf and commits the issue |
 | Keys | writes an encrypted repository secret; the value is never written to a file |
 | Check every key | asks each engine that has a key here for one word, and answers in a sentence per engine — a dead key is named in words, not as a status code |
-| Remove a member | moves the member's folder to the attic and commits the move |
+| Put away | moves the member's folder to `attic/<name>-<stamp>/`, writes a `WHY.md` inside it, and commits the move — nothing is deleted |
+| Bring back | moves an attic folder back onto the shelf under its own name, and republishes the member list |
 | Start over | makes a new repository from the template and leaves the old one untouched |
 
 ---
