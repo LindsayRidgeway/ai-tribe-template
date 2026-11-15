@@ -75,3 +75,8 @@ by reading the diff.
   design decision, but the file itself does not state it. `state/memory.md` is now the pressure valve: the
   member's retelling is bounded, the record that feeds it is not.
 - No check that `open-items.md` has anything to act on, only that its numbers are unique.
+- **One rule about contents, added 2026-11-15: no key in a member's files.** Not a schema rule — a shape
+  cannot see it — but `validate` and `tribe.py credentials` check every text file in the member's own folder
+  against the vendors' key prefixes, and the wake refuses when one is found. It is here because the files are
+  the *prompt*: a key pasted into `identity.md` is not only a public commit, it is sent to whichever vendor
+  that member runs on, at every wake. The finding names the file and the line and never quotes the value.

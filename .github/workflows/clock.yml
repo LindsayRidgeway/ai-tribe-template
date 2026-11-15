@@ -133,6 +133,13 @@ jobs:
           TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
           TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
           TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_GROQ: ${{ secrets.TRIBE_API_KEY_GROQ }}
+          TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
+          TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
+          TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+          TRIBE_API_KEY_TOGETHER: ${{ secrets.TRIBE_API_KEY_TOGETHER }}
+          TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
           # A tester following RUN.md adds ONE key. The clock wakes one member per world, so without this
@@ -154,6 +161,13 @@ jobs:
           TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
           TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
           TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_GROQ: ${{ secrets.TRIBE_API_KEY_GROQ }}
+          TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
+          TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
+          TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+          TRIBE_API_KEY_TOGETHER: ${{ secrets.TRIBE_API_KEY_TOGETHER }}
+          TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
           issue="$(python3 magazine.py --current)"

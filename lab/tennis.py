@@ -103,7 +103,8 @@ def wind_vector(direction: str, speed_mph: float) -> tuple[float, float]:
 
 
 # ---- the ball -------------------------------------------------------------------------------------
-def flight(p0, v0, wind, surface, net_check=True, cl=0.0):
+def flight(p0, v0, wind, surface, net_check=True, cl=0.0, drag=None, lift=None, net_x=None,
+           surfaces=None, net_profile=None):
     """Integrate one shot. Returns where it crossed the net, where it first landed, and the ball at that
     moment. No closed form: drag makes it a numeric problem, and doing it numerically is the honest way.
 
@@ -111,7 +112,18 @@ def flight(p0, v0, wind, surface, net_check=True, cl=0.0):
     `cl` is the lift coefficient from the spin: positive is topspin and pulls the ball down, negative is
     slice and holds it up. The lift is applied on the vertical axis rather than truly perpendicular to the
     flight; for a ball that is broadly travelling forward that is a good approximation, and for a lob it is
-    not — stated here rather than left for a reader to find."""
+    not — stated here rather than left for a reader to find.
+
+    The five keyword arguments exist so that a second game can use this one integrator instead of writing
+    its own — pickleball's ball is lighter, perforated and has a 44x20 court, and the alternative to passing
+    those numbers in is copying the loop, which is how this repository has been broken before. Every one of
+    them defaults to this game's own value, so a tennis call that passes none of them integrates exactly what
+    it integrated before the arguments existed (2,408-point grid, 0 differences; tests.py asserts it)."""
+    DRAG_ = DRAG if drag is None else drag
+    LIFT_ = LIFT if lift is None else lift
+    NET_X_ = NET_X if net_x is None else net_x
+    SURF_ = SURFACES if surfaces is None else surfaces
+    net_height_ = net_height if net_profile is None else net_profile
     x, y, z = p0
     vx, vy, vz = v0
     wx, wy = wind
@@ -121,22 +133,22 @@ def flight(p0, v0, wind, surface, net_check=True, cl=0.0):
         rx, ry, rz = vx - wx, vy - wy, vz
         rel = math.sqrt(rx * rx + ry * ry + rz * rz)
         speed2 = vx * vx + vy * vy + vz * vz
-        ax = -DRAG * rel * rx
-        ay = -DRAG * rel * ry
-        az = -DRAG * rel * rz - G - LIFT * cl * speed2
+        ax = -DRAG_ * rel * rx
+        ay = -DRAG_ * rel * ry
+        az = -DRAG_ * rel * rz - G - LIFT_ * cl * speed2
         nx, ny, nz = x + vx * dt, y + vy * dt, z + vz * dt
         nvx, nvy, nvz = vx + ax * dt, vy + ay * dt, vz + az * dt
-        if net_check and net is None and (x - NET_X) * (nx - NET_X) <= 0 and x != nx:
-            f = (NET_X - x) / (nx - x)
+        if net_check and net is None and (x - NET_X_) * (nx - NET_X_) <= 0 and x != nx:
+            f = (NET_X_ - x) / (nx - x)
             net = (y + f * (ny - y), z + f * (nz - z))
-            if net[1] < net_height(net[0]):
+            if net[1] < net_height_(net[0]):
                 return {"net": net, "land": None, "time": t,
                         "speed_at_net": math.sqrt(vx * vx + vy * vy + vz * vz)}
         if nz <= 0:                                       # first bounce on the court plane
             f = z / (z - nz) if z != nz else 1.0
             land = (x + f * (nx - x), y + f * (ny - y))
             vx2, vy2, vz2 = vx + f * (nvx - vx), vy + f * (nvy - vy), vz + f * (nvz - vz)
-            s = SURFACES[surface]
+            s = SURF_[surface]
             after = (vx2 * s["f"], vy2 * s["f"], -vz2 * s["e"])
             return {"net": net, "land": land, "time": t + f * dt,
                     "speed_in": math.sqrt(vx2 * vx2 + vy2 * vy2 + vz2 * vz2),
@@ -147,8 +159,14 @@ def flight(p0, v0, wind, surface, net_check=True, cl=0.0):
     return {"net": net, "land": None, "lost": True}
 
 
-def net_height(y: float) -> float:
-    return NET_CENTRE + (NET_POSTS - NET_CENTRE) * abs(y - WIDTH / 2) / (WIDTH / 2)
+def net_height(y: float, centre: float | None = None, posts: float | None = None,
+               width: float | None = None) -> float:
+    """The net's height across the court: low in the middle, high at the posts. The three arguments are for
+    the other games — pickleball's net is 2.83/3.00 ft on a 20-ft court — and default to tennis's own."""
+    c = NET_CENTRE if centre is None else centre
+    p = NET_POSTS if posts is None else posts
+    w = WIDTH if width is None else width
+    return c + (p - c) * abs(y - w / 2) / (w / 2)
 
 
 # ---- naming what the page shows -------------------------------------------------------------------
@@ -206,6 +224,11 @@ class Player:
     # and `verdict()` are the same ones on both seats — a person on an easier court would learn nothing about
     # the game the members are learning, which is the whole reason for putting them on this one.
     person: bool = False
+    # Doubles, added 2026-11-15 for pickleball and defaulted: the name beside them on the court, and the
+    # court side they are standing on. The side is *derived* from the team score's parity every serve and
+    # never edited, because two copies of a position are two positions.
+    partner: str = ""
+    court_side: str = ""
 
     def skill(self, attr: str) -> float:
         """Three attributes, all asymptotic in balls hit. The first hundred balls are worth more than the
@@ -328,6 +351,31 @@ def aim_at(p: Player, target, shot: str, surface: str, wind, power: float) -> tu
     return (lo + hi) / 2, power
 
 
+# What a player can reach without moving, and how high. The racquet is 27in and a swung arm puts the middle of
+# the strings about 3ft from the hips, which is the number the interception measures from; the high one is
+# where an overhead stops being an overhead and a ball stops being returnable at all.
+RACQUET_REACH = 7.0
+RACQUET_HIGH = 9.0
+STEP = 0.02                           # s; the slice the ball's plan is stepped in, and why a miss is measured in tenths
+# Two costs that are not distance and that the first version of this rule ignored entirely. A player does not
+# leave on the opponent's contact: they split-step, read the ball, and are moving a quarter of a second later.
+# And a ball met at a full sprint is a frame, not a shot — the feet have to plant before the swing, which is the
+# 'brake' the movement list already owed. Both are charged here, in seconds, against the time available.
+#
+# The seven feet is a standing lunge, not a dive: three feet of arm and racquet, plus the first step you take as
+# you reach. It is deliberately at the generous end of plausible because this model gives the player no
+# anticipation at all — the real player knows roughly where the ball is going from the swing before it leaves the
+# strings, and that knowledge is worth more than a foot of arm — and because the step is charged for twice: once
+# here as distance and once above as REACTION. Calibrated 2026-11-15 against 600 balls the engine itself struck
+# (`/tmp/pop10.py`, 600 fixed balls, every skill level asked about the same ones): with these three numbers a
+# player who has hit nothing reaches 74% of them and one with six hundred balls reaches 95%; the old shortcut
+# reached 100% of every one of them at every skill level, which is the defect. In 150-point matches the member at
+# 300 and at 600 balls is beaten on 18-28% of the balls they have to get to. With a three-foot radius those
+# matches were 56% and nobody could play; that is what the guard in the backlog is for.
+REACTION = 0.25
+SETTLE = 0.20
+
+
 def movement_speed(p: Player) -> float:
     """How fast a player covers ground, in feet per second. A beginner shuffles at about 6 ft/s, which is
     brisk walking; five hundred balls later they are at 20 ft/s, which is a run. Real figures: adults move at
@@ -336,7 +384,9 @@ def movement_speed(p: Player) -> float:
     return 5.0 + 15.0 * p.skill("reach")
 
 
-def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str) -> tuple[bool, str]:
+def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str,
+              home_x: float | None = None, court_len: float | None = None,
+              court_wid: float | None = None) -> tuple[bool, str]:
     """Can the player get to the ball before it has gone past them?
 
     Player and ball close on each other, so the question is when they meet, not how far the ball landed. The
@@ -350,22 +400,48 @@ def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str) -
     short balls exactly backwards — a ball landing in the service box was 21ft away across the court and was
     called unreachable, when in fact it bounces and comes back to you — and it failed players for something that
     was neither visible nor theirs to control, which is the one thing a rule in this game must never do."""
-    home_x = 2.0 if p.north else LENGTH - 2.0
-    dx, dy = home_x - land[0], WIDTH / 2 - land[1]
-    distance = math.hypot(dx, dy)
-    gap = max(0.0, distance - 3.0)                 # racquet and arm
-    if gap <= 0:
-        return True, ""
-    ux, uy = dx / distance, dy / distance
-    vx, vy, _vz = bounce["v"]
-    toward = max(0.0, vx * ux + vy * uy)           # how fast the ball is closing on the player
-    t_meet = gap / (movement_speed(p) + toward)
-    # the ball is hittable from the bounce until it bounces again, which is roughly a second of flight
-    available = flight_time + 1.0
-    if t_meet <= available:
-        return True, ""
-    short = (t_meet - available) * movement_speed(p)      # the ground they would have covered with more time
-    return False, (f"{short:.0f}ft short of it, beaten by the "
+    default_home = 2.0 if p.north else LENGTH - 2.0
+    hx = default_home if home_x is None else (home_x if p.north else (court_len or LENGTH) - home_x)
+    court_w = WIDTH if court_wid is None else court_wid
+    hy = court_w / 2.0
+    speed = movement_speed(p)
+
+    # THE INTERCEPTION, not a shortcut. Everything below asks one question at every 0.02s slice of the ball's
+    # life: is the ball within a racquet's length of the player *by then*? The player has had `flight_time`
+    # seconds to run before the ball ever bounced, and then the ball's own remaining life. Both halves matter
+    # and both are now in the arithmetic.
+    #
+    # Why it had to be rewritten. The first version asked a different question — how fast are we closing? — and
+    # added the ball's speed towards the player to the player's own, then gave a second of grace on top. Three
+    # lenient shortcuts stacked on a question that was already the wrong one, so the answer was always yes:
+    # 50 sampled points, not one ball in the whole set was called unreachable, and the game ended points only
+    # when somebody missed. A tennis game in which nobody is ever beaten is not a hard tennis game; it is a
+    # game lying about what tennis is.
+    x, y, z = land[0], land[1], 0.0
+    vx, vy, vz = bounce["v"]
+    vz = abs(vz)                        # a hand-written record can carry the pre-bounce sign; the ball goes up
+    t = 0.0
+    best = None                         # (shortfall in seconds, dx, dy) at the closest the player ever got
+    while t <= 4.0:
+        if z <= RACQUET_HIGH:           # a ball above nine feet is not intercepted, it is smashed — later
+            need = max(0.0, math.hypot(hx - x, hy - y) - RACQUET_REACH) / speed + SETTLE
+            short = need - (flight_time + t - REACTION)
+            if best is None or short < best[0]:
+                best = (short, hx - x, hy - y)
+            if short <= 0.0:
+                return True, ""
+        if t > 0.0 and z <= 0.0:        # the second bounce: the ball is dead and the chance has gone
+            break
+        rel = math.sqrt(vx * vx + vy * vy + vz * vz)
+        ax, ay, az = -DRAG * rel * vx, -DRAG * rel * vy, -DRAG * rel * vz - G
+        x, y, z = x + vx * STEP, y + vy * STEP, z + vz * STEP
+        vx, vy, vz = vx + ax * STEP, vy + ay * STEP, vz + az * STEP
+        t += STEP
+
+    short, dx, dy = best
+    # The direction is the direction of the miss at the closest moment, not at the landing point: a ball that
+    # lands in the middle and bounces away sideways beats you wide, and the old string called it deep.
+    return False, (f"{max(1.0, short * speed):.0f}ft short of it, beaten by the "
                    f"{'wide' if abs(dy) > abs(dx) else 'deep'} ball")
 
 
@@ -384,26 +460,27 @@ SEASONS = ROOT / "games" / "tennis" / "seasons"
 SEASON = "2026-spring"                    # the first season; the year the colony started playing
 
 
-def season_paths(season: str, override: str | None = None) -> tuple[Path, Path]:
-    d = Path(override) if override else SEASONS / season
+def season_paths(season: str, override: str | None = None, sport: str = "tennis") -> tuple[Path, Path]:
+    base = SEASONS if sport == "tennis" else ROOT / "games" / sport / "seasons"
+    d = Path(override) if override else base / season
     return d, d / "practice.json"
 
 
-def load_season(season: str, override: str | None = None) -> dict:
-    d, f = season_paths(season, override)
+def load_season(season: str, override: str | None = None, sport: str = "tennis") -> dict:
+    d, f = season_paths(season, override, sport)
     if not f.exists():
         return {"season": season, "opened": None, "note": "", "members": {}}
     return json.loads(f.read_text(encoding="utf-8"))
 
 
-def save_season(book: dict, season: str, override: str | None = None) -> Path:
-    d, f = season_paths(season, override)
+def save_season(book: dict, season: str, override: str | None = None, sport: str = "tennis") -> Path:
+    d, f = season_paths(season, override, sport)
     d.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(book, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     # report.md is a function of practice.json, written here and never by hand. The colony's first season had a
     # report somebody typed, which is exactly the class of file the derivability test exists to catch: a page
     # that can drift from the record it claims to summarise.
-    (d / "report.md").write_text(season_report(season, override), encoding="utf-8")
+    (d / "report.md").write_text(season_report(season, override, sport), encoding="utf-8")
     return f
 
 
@@ -462,7 +539,7 @@ def seed_practice(book: dict, values: dict[str, int], when: str) -> list[tuple[s
     return applied
 
 
-def season_report(season: str, override: str | None = None) -> str:
+def season_report(season: str, override: str | None = None, sport: str = "tennis") -> str:
     """The sentence the founder asked for, printed only when the numbers support it.
 
     Every claim below carries the file it came from and the sessions it was computed over. The guard that
@@ -638,7 +715,13 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
                 server.winners += 1
                 return lines
         kind = rng.choice(["forehand", "backhand", "backhand", "forehand"])
-        depth = NET_X + rng.uniform(4, 34)
+        # "4 to 34 feet past the net" is a distance from the net, and the net is on the other side of the court
+        # depending on which end you are hitting from. This line used to add to NET_X for both seats, so a south
+        # player was aimed four to thirty-four feet *behind themselves* and bisected onto the tallest face the
+        # search had: their returns landed on their own side, which is why a season of point-by-point matches
+        # averaged 1.2 shots and read as two beginners who could not rally. Found 2026-11-15 while trying to
+        # measure how often a ball goes unreached — there were almost no in-court balls in a point to measure.
+        depth = NET_X + rng.uniform(4, 34) if receiver.north else NET_X - rng.uniform(4, 34)
         wide = WIDTH * (0.2 if rng.random() < 0.5 else 0.8) + rng.gauss(0, 9 * (1 - receiver.skill("control")))
         face, power = aim_at(receiver, (depth, wide), kind, surface, wind_vec, power=rng.uniform(40, 72))
         shot = strike(receiver, incoming, face=face, power=power, aim=wide,
@@ -970,14 +1053,14 @@ def vendors_of(names: list[str]) -> list[str]:
 
 
 # ---- one rally, whoever is playing it --------------------------------------------------------------
-def open_book(names: list[str], args, default: str = "400,20") -> tuple[dict | None, list[int]]:
+def open_book(names: list[str], args, default: str = "400,20", sport: str = "tennis") -> tuple[dict | None, list[int]]:
     """The season's practice, and the seeding that goes with it — in one place.
 
     "The file wins over the flag" is a rule this file has now needed twice (members on 2026-11-04, a person's
     seat on 2026-11-12), and a rule written in two places is a rule that will disagree with itself. A season
     with no file is not an error: it is a new season, and everybody starts at zero.
     """
-    book = load_season(args.season, args.season_dir) if args.season else None
+    book = load_season(args.season, args.season_dir, sport) if args.season else None
     practice = [int(x) for x in (args.practice or default).split(",")]
     if book is None:
         return None, practice

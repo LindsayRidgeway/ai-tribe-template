@@ -371,15 +371,16 @@ originals does not.
   her hair will use that. A member told only *Elaine* will invent a life, and you will spend the evening correcting
   it. That question is the feature: a ready-made memory, in the member's own file, from the first minute — nothing
   has to be taught by conversation.
-- **The ground is a world, not the chat.** A chat is the table they sit at; the `soil/<world>/` folder is where they
-  live. Write `soil/<world>/world.md` — where it is, what year, what is normal there, what none of them would ever
-  say — and every member standing in that world reads it at every wake. `drops.md` beside it is for what changed
-  this week. This is the difference between four characters and four strangers in four empty rooms.
+- **The ground is a world, not the chat.** A chat is the table they sit at; a world is the place they live. Press
+  **Worlds** in the navigation, make one, and write what is in it: where it is, what year, what is normal there, what
+  none of them would ever say — and who knows whom. Every member standing in that world reads it at every wake, and
+  `drops.md` beside it is for what changed this week. This is the difference between four characters and four
+  strangers in four empty rooms.
 - **Then open a chat and put all four in it.** They hear the same thing and one of them speaks, as above.
 
-Two limits worth knowing before you build one. The page cannot create a world or edit its `world.md` yet (§14), so
-those two files are edited in the repository for now. And a description is capped at 8,000 characters — several
-pages, enough for a character and not for a whole wiki.
+Two limits worth knowing before you build one. A description is capped at 8,000 characters — several pages, enough
+for a character and not for a whole wiki. And a world's text is read only up to its last 2,500 characters at a wake,
+so the setting belongs first and the lore after it; a world's `world.md` is not the place for a novel.
 
 ### Who gets the floor
 
@@ -639,12 +640,31 @@ number is refused before anything is built.
 AIT shows you the last four characters and nothing more, and no member ever sees a key — it sees the result of a
 call.
 
-**Where a key lives, and why it is two places.** For a **wake** it is a secret in your repository: encrypted before
-it leaves your browser, decrypted only inside the run, never written into a file. For **chat** it has to be
-reachable by the page itself, so it is in this browser and nowhere else. That is a real trade and worth saying
-plainly: anyone sitting at your unlocked laptop could spend it. The alternative is a server of ours holding your
-key, and that is worse — it is the one thing this manual is promising you do not have. AIT keeps the two copies in
-step; you paste once.
+**Where a key lives, and why it is two places.** For **chat** it has to be reachable by the page itself, so it is in
+this browser and nowhere else. For a **wake** it has to be in the repository, as an Actions secret — and **this page
+does not write one.** You add it yourself, once, in the repository's own *Settings → Secrets and variables →
+Actions*, named `TRIBE_API_KEY_<ENGINE>`. GitHub stores it sealed and write-only: it is opened only inside the run,
+never written into a file, and not even you can read it back afterwards. So no key is ever in the repository's
+contents, and making a repository public does not expose one.
+
+This section said "AIT keeps the two copies in step; you paste once" until 2026-11-15. That was not true, and the
+correction matters more than the sentence did: the two copies are **set separately**, on two pages, and when a wake
+fails because its copy is missing the page names the secret and tells you where it goes.
+
+The chat copy is the one somebody else could spend: anyone sitting at your unlocked laptop could use it. The
+alternative is a server of ours holding your key, and that is worse — it is the one thing this manual is promising
+you do not have.
+
+**If a key ever ends up in a member's files, the wake stops and says where.** That is the one failure here
+that is prevented rather than reported: a member's files are what gets sent to the engine, so a key in a
+journal or an identity would be handed to the company at every wake. AIT names the file and the line, never
+the value, and does not edit anything — the line is yours to delete, and if the key is real, revoke it at the
+company and paste a new one.
+
+**A public tribe.** The keys are safe from it; the record is not. A repository made private can be made public
+later in its own settings, and from that moment every journal entry, every chapter, and every word you say to a
+member is readable by anyone. AIT reads the repository's visibility each time it opens and, when it finds it
+public, says so above every page — until it is made private again.
 
 **What it costs.** AIT is free and has nothing to sell you. You pay the engine company, by the call, at their
 published price.
@@ -721,6 +741,33 @@ undoable on the first day, and this is the compromise: instant to put away, a se
 **Starting over** is the same idea at the size of a tribe: put the whole repository in the attic and make a new
 one. AIT will do it, and will make you say the tribe's name first.
 
+## 11a. Keeping your tribe current
+
+A tribe is installed as a copy, taken on the day you installed it. The project keeps moving after that day, so
+there is a command that brings your copy forward — and it is the same command for everybody, whoever installed
+you and whenever.
+
+    python3 lab/update_tribe.py            # say what would change; writes nothing
+    python3 lab/update_tribe.py --write    # copy the files that differ
+    python3 lab/update_tribe.py --write --commit --push
+
+It downloads the published template, compares only the **machinery** — the harness, the workflows, the scripts,
+this manual — and copies what differs. **It never touches your tribe itself:** not `wake/members/`, not a member's
+diary or voice, not `soil/`, `plates/`, `issues/`, `letters/` or anything a game has played. It never deletes a
+file. It never overwrites a `README.md` you have changed. And it does not copy the template's empty list of members
+over yours: `members.json` is rebuilt from what is actually in your folder.
+
+**If it refuses, nothing has been written.** An update is one action or none: the copy is validated with
+`tribe.py validate`, and if the tribe does not validate afterwards, every replaced file is put back, every added
+file is removed, and the working tree is exactly as it was. You will see which member failed and why.
+
+**Files you add yourself are never touched**, because the update only knows about the files the template ships.
+
+**A file the project has retired is listed, never deleted.** If the template stops shipping something, the update
+prints it as retired, with the reason and the date, and leaves it on disk. Deleting it is a decision, made by you,
+by passing `--prune` — and the same validation gate applies to the result. A copier that deletes things quietly is
+not a thing anybody can safely press.
+
 ## 12. When something is wrong
 
 In the order these actually happen.
@@ -785,6 +832,10 @@ two testers read it and each found it denying features that were working in fron
 of them was on the missing list, and none of them is missing.
 - **Sign-in and repository creation** (§3) — one OAuth round trip, then a repository made, filled and opened.
 - **Onboarding as a conversation** (§4) — *Add a member*, one question at a time, writing the files as it goes.
+- **Worlds** (§6a) — 2026-11-15: the ground itself, written from the page. **Worlds** lists every `soil/` folder
+  with who stands in it, opens one, and saves `name.md` (the title the magazine prints), `world.md` (the setting read
+  into every wake) and `drops.md` (what changed this week); a world can be made from the same page in three fields.
+  Until this, a person with a browser could cast four characters and give them nowhere to live.
 - **The identity a member is made with** (§4) — 2026-11-13: every new member is given, in its own voice, the
   paragraph that lets it be the figure it is seated as rather than a model apologising for a part, and the form
   asks what is known about it. That answer is a ready-made memory in the member's own file from its first minute —
@@ -815,12 +866,7 @@ of them was on the missing list, and none of them is missing.
    pictures here even where the vendor's model is not.
 2. **A choice of games** (§7), and a session you can watch while it happens. There is one game on the page and a
    report at the end, not a running table.
-3. **A world you can write from the page** (§6a). A world is a folder under `soil/` and its `world.md` is read by
-   every member that stands there — which is what makes a cast of characters into a place rather than four strangers.
-   The page can pick a world when it makes a member and cannot create one or edit its files: those two steps are the
-   repository, for now. The description a member is made with is not affected — that is written from the page, and
-   it is the half that carries the character.
-4. **The clock's key, set from the page** (§10). The Keys page holds the copy the browser uses for chat; the copy
+3. **The clock's key, set from the page** (§10). The Keys page holds the copy the browser uses for chat; the copy
    a wake needs is a repository secret, and setting one still means opening the repository's own settings. This is
    the one place a person with no terminal is still sent to one. Nothing here sums what a month costs, either.
 
@@ -836,6 +882,8 @@ to, and will never have to.
 | in AIT | underneath |
 |---|---|
 | Connect to a tribe | a `GET /repos/<owner>/<name>` with a token, which proves the token can see the repository before anything is written. If this browser has opened that repository before, the token is taken from what it already holds and the box can be left empty; the button reads **Open** rather than **Connect** |
+| Make a world | writes `soil/<world>/name.md` (the title the magazine prints) and `soil/<world>/world.md` (the setting every member standing there reads at every wake), two commits. The folder name is checked against the worlds you already have before anything is written, and so is the one silent failure: a world with no `world.md` reaches nobody |
+| Save a world file | one commit to that world's `name.md`, `world.md` or `drops.md` — the same read-then-write as the identity editor, with the same retry when GitHub's read lags its own write, and the same refusal to overwrite a file that changed under you without a second press |
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it. The description you paste — the answer to *does it arrive with a memory?* — goes into `identity.md`, in the member's own voice, before anything else is written |
 | Wake now | starts a wake run for that member, waits for it, and reports what it left in the member's `output/` folder — the file it wrote, named, or that nothing was written, with the run's number beside it. A green run is not a wake: a member the clock skipped leaves every step successful |
 | Say something in chat | a direct call to the engine from this page, answered as it is written; every exchange is committed to `state/conversation.md`, and a `NOTE:` goes into the journal |
@@ -855,7 +903,7 @@ to, and will never have to.
 | Play a session | starts a **tennis** season with the players, court, rally count and season name you chose (`season.yml`); the result is committed under `games/tennis/seasons/<season>/` and read back into the page. The same form takes a **person's seat**: fill in `person` and `shot` and one point is played with your typed movement against one member, written to `games/tennis/seasons/<season>/points/` — no engine is asked for your shot. Putting is a terminal script (`lab/putt.py`) and no page starts it — §7 says why |
 | Ask for a picture | calls the engine that paints (OpenAI, Gemini or Qwen — the member's own `voice.md` decides), files the image in `plates/` with a card naming the maker and the sentence it was asked with, and commits both together. A member whose engine has no image model never reaches this: the form is replaced by the refusal, which names the three that can. A picture named for a piece takes the sentence from that piece's own `commission:` line, and lands under the piece's name so the magazine prints it there |
 | Build an issue | assembles the magazine from the shelf and commits the issue |
-| Keys | writes an encrypted repository secret; the value is never written to a file |
+| Keys | keeps the chat copy in this browser and nothing else. The wake copy is an Actions secret you create yourself, in the repository's own settings: sealed, write-only, never in a file, and unreadable back — by you or by AIT |
 | Check every key | asks each engine that has a key here for one word, and answers in a sentence per engine — a dead key is named in words, not as a status code |
 | Put away | moves the member's folder to `attic/<name>-<stamp>/`, writes a `WHY.md` inside it, and commits the move — nothing is deleted |
 | Bring back | moves an attic folder back onto the shelf under its own name, and republishes the member list |

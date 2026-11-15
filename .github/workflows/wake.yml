@@ -140,6 +140,9 @@ jobs:
           TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
           TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
           TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_TOGETHER: ${{ secrets.TRIBE_API_KEY_TOGETHER }}
+          TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
           vendor="$(echo "$API_BASE" | tr 'a-z' 'A-Z')"
@@ -267,11 +270,31 @@ jobs:
           TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
           TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
           TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_TOGETHER: ${{ secrets.TRIBE_API_KEY_TOGETHER }}
+          TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
           curl -sf -H "x-goog-api-key: ${TRIBE_API_KEY_GEMINI}" \
             "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200" \
             | python3 -c "import json,sys;d=json.load(sys.stdin);print('\n'.join(sorted(m['name'] for m in d.get('models',[]) if 'generateContent' in m.get('supportedGenerationMethods',[]))))" || echo "(could not list models)"
+
+      # A key in a member's own files is not only a public commit: those files are the prompt, so it would be
+      # sent to whichever vendor this member runs on, at every wake, for as long as the line is there. Stopping
+      # the wake is the only place the harm can be prevented rather than reported. The finding names the file
+      # and the line and never quotes the value — a check that prints the secret to a log page is the leak.
+      - name: Nothing in this member's files is a key
+        run: |
+          set -euo pipefail
+          # A tribe made before 2026-11-15 carries a `tribe.py` with no such subcommand, and this workflow may
+          # arrive in its own update before that file does. Refusing to wake every member in that window would
+          # turn a protection into an outage, so the check asks first and says which of the two it is.
+          if ! python3 tribe.py --help 2>&1 | grep -q 'credentials'; then
+            echo "::warning::this tribe's tribe.py predates the key check, so nothing in this member's files was"
+            echo "  checked for a credential. Bring the tribe forward (UPDATE.md) to get the check."
+            exit 0
+          fi
+          python3 tribe.py credentials "${{ inputs.member }}"
 
       - name: One wake
         env:
@@ -293,6 +316,9 @@ jobs:
           TRIBE_API_KEY_OPENROUTER: ${{ secrets.TRIBE_API_KEY_OPENROUTER }}
           TRIBE_API_KEY_CEREBRAS: ${{ secrets.TRIBE_API_KEY_CEREBRAS }}
           TRIBE_API_KEY_MISTRAL: ${{ secrets.TRIBE_API_KEY_MISTRAL }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_TOGETHER: ${{ secrets.TRIBE_API_KEY_TOGETHER }}
+          TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
           # The model goes in first so the array is never empty: "${ARGS[@]:-}" on an empty array

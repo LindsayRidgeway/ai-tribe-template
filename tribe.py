@@ -209,6 +209,60 @@ def member_dirs() -> list[Path]:
     return sorted(p for p in MEMBERS.glob("*") if p.is_dir())
 
 
+# Credential-shaped strings, anchored on the prefixes the vendors actually issue. A generic rule — "a line
+# with api_key: in it" — would refuse a member that wrote a sentence about keys, and a check that cries wolf
+# is a check people switch off. These are narrow on purpose: a false positive here stops a wake.
+CREDENTIALS = [
+    ("a GitHub token",              r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    ("a GitHub fine-grained token", r"\bgithub_pat_[A-Za-z0-9_]{20,}"),
+    ("an Anthropic key",            r"\bsk-ant-[A-Za-z0-9_-]{20,}"),
+    ("an OpenAI or DashScope key",  r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}"),
+    ("a Google key",                r"\bAIza[0-9A-Za-z_-]{30,}"),
+    ("an AWS key id",               r"\bAKIA[0-9A-Z]{16}\b"),
+    ("a Slack token",               r"\bxox[baprs]-[A-Za-z0-9-]{10,}"),
+    ("a Hugging Face token",        r"\bhf_[A-Za-z0-9]{30,}"),
+]
+
+
+def credentials_in(text: str) -> list[tuple[int, str]]:
+    """Every line that is credential-shaped: (line number, what it looks like). The value is never returned.
+
+    The founder's question, 2026-11-15: how are keys kept from being pirated — and, in the amendment that
+    followed, what happens when one is pasted into a file rather than into the browser. The answer to the
+    second is that these files are the prompt: a key in journal.md is not only a public commit, it is sent to
+    whichever vendor that member runs on, at every wake, for as long as the line is there.
+    """
+    out: list[tuple[int, str]] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        for what, pattern in CREDENTIALS:
+            if re.search(pattern, line):
+                out.append((i, what))
+                break
+    return out
+
+
+def scan_credentials(name: str) -> list[str]:
+    """A member's own files, checked before they are handed to an engine. Text files only: `output/` also
+    holds pictures, and an image is not a key."""
+    base = MEMBERS / name
+    bad: list[str] = []
+    if not base.is_dir():
+        return bad
+    for f in sorted(base.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in {".md", ".txt", ".json", ".yml", ".yaml", ".csv"}:
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        # The path as the owner sees it in the repository. `MEMBERS` is moved by the tests, so it is not assumed
+        # to sit under REPO — a finding that says "/private/tmp/…/journal.md" is a finding nobody can act on.
+        shown = f.relative_to(REPO) if f.is_relative_to(REPO) else Path("wake/members") / f.relative_to(MEMBERS)
+        for line, what in credentials_in(text):
+            bad.append(f"{shown} line {line} looks like {what}")
+    return bad
+
+
 def validate(name: str) -> list[str]:
     base = MEMBERS / name
     bad: list[str] = []
@@ -258,6 +312,11 @@ def validate(name: str) -> list[str]:
             bad.append(f"open-items.md repeats item number(s) {sorted(dupes)} — the harness takes the first match")
     if not (base / "output").is_dir():
         bad.append(f"missing directory: {base / 'output'} — a wake writes its act there")
+    for hit in scan_credentials(name):
+        # Named, never redacted: the record is not edited behind the owner's back, and a file quietly rewritten
+        # to protect itself has stopped being one. The remedy is always the same two steps, and both are theirs.
+        bad.append(f"{hit} — a key belongs in Settings → Secrets, never in the record. These files are the prompt, "
+                   f"so it would be sent to the engine at every wake. Delete the line; if the key is real, revoke it.")
     return bad
 
 
@@ -705,6 +764,8 @@ def main() -> int:
     p_place.add_argument("--force", action="store_true",
                          help="write the place even when no soil folder of that name exists yet")
     sub.add_parser("validate").add_argument("name", nargs="?")
+    sub.add_parser("credentials", help="does any of this member's own text contain a key? (exits 1 if so)") \
+        .add_argument("name", nargs="?")
     sub.add_parser("status")
     p_fresh = sub.add_parser("fresh", help="start a colony with no past: clear the record, keep the members")
     p_fresh.add_argument("--name", default="", help="what this world is called; prints at the top of every issue")
@@ -752,6 +813,22 @@ def main() -> int:
             rc = rc or (1 if bad else 0)
         if not args.name and others:
             print(f"({len(others)} fixture(s) not in a colony, not checked: {', '.join(others)})")
+        return rc
+    if args.cmd == "credentials":
+        # Everything the wake would hand an engine, and nothing else: the member's own folder.
+        names = [args.name] if args.name else [n for n in [d.name for d in member_dirs()]
+                                               if (MEMBERS / n / "state" / "place.md").exists()]
+        rc = 0
+        for nm in names:
+            hits = scan_credentials(nm)
+            for h in hits:
+                print(f"!! {h}")
+            rc = rc or (1 if hits else 0)
+        if rc:
+            print("   nothing was sent anywhere. Delete the line, and revoke the key if it was real:")
+            print("   a credential in a member's record is a credential in its prompt.")
+        elif args.name:
+            print(f"{args.name}: no key in its files")
         return rc
     if args.cmd == "fresh":
         return fresh(args.name, args.place, args.confirm)
