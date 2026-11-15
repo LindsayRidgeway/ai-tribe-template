@@ -35,6 +35,7 @@ Exit codes: 0 nothing to do or success, 1 something refused, 2 the template coul
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import re
@@ -50,6 +51,8 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = "LindsayRidgeway/ai-tribe-template"
 BRANCH = "main"
 TARBALL = f"https://codeload.github.com/{TEMPLATE}/tar.gz/refs/heads/{BRANCH}"
+HEAD_API = f"https://api.github.com/repos/{TEMPLATE}/commits/{BRANCH}"
+VERSION = ".ait/version.json"
 RETIRED_NAME = ".tribe-retired.json"
 
 # Machinery: files the project owns and keeps current. A path is replaceable if it starts with one of
@@ -180,6 +183,48 @@ def roll_back(root: Path, changed: list[str], added: list[str]) -> None:
             p.unlink()
 
 
+def template_head() -> str | None:
+    """The commit the machinery came from — the same version the page records, in the same place.
+
+    Read from the API rather than from the tarball, because a tarball's own commit is only in the name of the
+    directory it unpacks to and a version written down twice is a version that will disagree with itself. None
+    when it cannot be read: the update still happens and the record is left alone, because a stamp guessed is
+    worse than a stamp missing.
+    """
+    try:
+        req = urllib.request.Request(HEAD_API, headers={"User-Agent": "ait-update",
+                                                        "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=20) as r:      # noqa: S310 - a fixed https URL
+            return json.loads(r.read().decode("utf-8")).get("sha")
+    except Exception as e:                                      # noqa: BLE001 - reported, not raised
+        print(f"!! could not read which commit the template is at: {e}", file=sys.stderr)
+        return None
+
+
+def stamp_version(root: Path, sha: str) -> str:
+    """Record what this tribe now runs, in the file the page reads.
+
+    Two updaters and one record: without this, a tribe updated from a terminal is a tribe whose record still
+    names the commit it was installed from, so the page compares its files against a version they never came
+    from and reports a dozen untouched files as things the owner changed. `installed_from` is kept — it is where
+    the tribe came from, and an update does not change that.
+    """
+    path = root / VERSION
+    prev: dict = {}
+    if path.exists():
+        try:
+            prev = json.loads(path.read_text(encoding="utf-8")) or {}
+        except Exception:                                       # noqa: BLE001 - an unreadable stamp is replaced
+            prev = {}
+    body = {"schema": "ait-version/1", "template": TEMPLATE,
+            "installed_from": prev.get("installed_from") or sha,
+            "updated_to": sha,
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body, indent=1) + "\n", encoding="utf-8")
+    return VERSION
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=str(ROOT), help="the tribe repository to update (default: this one)")
@@ -224,6 +269,14 @@ def main() -> int:
 
     apply(template, root, changed, added)
     print(f"copied {len(changed) + len(added)} file(s)")
+    # The record moves with the files, in the same press and the same commit, or the next reader of this tribe
+    # believes a version its files contradict. Rolled back with them when the tribe does not validate.
+    head = template_head()
+    if head:
+        had = (root / VERSION).exists()
+        stamp_version(root, head)
+        (changed if had else added).append(VERSION)
+        print(f"version: {head[:7]} recorded in {VERSION}")
     if a.prune and gone:
         for r in gone:
             subprocess.run(["git", "rm", "-q", "--", r["path"]], cwd=root, check=False)

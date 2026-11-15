@@ -238,6 +238,15 @@ class Player:
                 "sweet": 0.72 + 0.26 * learned,
                 "reach": 0.35 + 0.60 * learned}[attr]
 
+    def hands(self, pace_in: float = 40.0) -> float:
+        """Control as it is when a ball is actually coming at you. A fast ball takes away the time to set up, so
+        the same player is less accurate returning it. This existed inside `strike` only, as one line, which
+        meant the shot the player *tried* to play and the shot they could actually hit were scaled by two
+        different numbers — and the corner they aimed at was placed by the optimistic one. Everything that
+        reasons about this player's accuracy reads this, so there is one answer to "how good are their hands
+        right now" rather than two. Brought over from the longer engine on 2026-11-15 (Item 14)."""
+        return self.skill("control") * (1 - 0.22 * min(1.0, pace_in / 100.0))
+
 
 def contact_point(p: Player, shot: str = "rally") -> tuple[float, float, float]:
     """Where the racquet meets the ball. A serve is struck high from just behind the baseline; a groundstroke
@@ -286,7 +295,8 @@ def spin_for(shot: str, face: float, power: float) -> float:
 
 
 def strike(p: Player, incoming: dict | None, face: float, power: float, aim: float,
-           shot: str, surface: str, wind: tuple[float, float], clean: bool = False) -> dict:
+           shot: str, surface: str, wind: tuple[float, float], clean: bool = False,
+           aim_dist: float | None = None) -> dict:
     """Movement in, ball out. The player supplies a face angle in degrees (negative closed), a power in
     per-cent and an aim offset in feet; everything else is physics plus the player's skill."""
     control = p.skill("control")
@@ -316,7 +326,12 @@ def strike(p: Player, incoming: dict | None, face: float, power: float, aim: flo
     # face angle steer as well, and a serve aimed at the right box landed thirty feet wide. Aim is absolute
     # across the court (feet from the west sideline), not relative to the ball, because a serve struck four
     # feet off centre otherwise lands four feet off target.
-    azimuth = math.atan2(aim - p0[1], 32.0)
+    # ... and the distance in that ratio is the distance to the thing being aimed at, not a constant. It was 32
+    # feet for every shot in the game, which is neither the serve's fifty nor a defensive ball's seventy: the
+    # lateral error was proportional to how far the ball had to travel, so a corner aimed four feet inside the
+    # sideline landed six feet outside it and every miss list read "wide". Found 2026-11-15 while a serve that
+    # should have gone to a corner of the box landed four feet past the sideline (Item 14).
+    azimuth = math.atan2(aim - p0[1], 32.0 if aim_dist is None else max(6.0, aim_dist))
     v = speed * MPH
     vx = v * math.cos(elevation) * math.cos(azimuth) * (1 if p.north else -1)
     vy = v * math.cos(elevation) * math.sin(azimuth)
@@ -333,10 +348,12 @@ def aim_at(p: Player, target, shot: str, surface: str, wind, power: float) -> tu
     afterwards, by `strike`, from the player's control."""
     lo, hi = -20.0, 40.0
     fwd = 1.0 if p.north else -1.0        # "past the target" is +x for one end and -x for the other
+    p0 = contact_point(p, shot)
+    dist = math.hypot(target[0] - p0[0], target[1] - p0[1])
     for _ in range(22):
         mid = (lo + hi) / 2
         probe = strike(p, None, face=mid, power=power, aim=target[1],
-                       shot=shot, surface=surface, wind=wind, clean=True)
+                       shot=shot, surface=surface, wind=wind, clean=True, aim_dist=dist)
         land = probe["traj"].get("land")
         if land is None:
             lo = mid                       # still in the net: hit up more
@@ -699,6 +716,220 @@ def season_report(season: str, override: str | None = None, sport: str = "tennis
 
 
 # ---- the match ------------------------------------------------------------------------------------
+
+# ---- shot selection ---------------------------------------------------------------------------------
+# Brought onto this branch from the longer engine on 2026-11-15 (Item 14). These functions are the answer to
+# "which ball does this player play", and the branch that had them is the branch that made every record and film
+# in `games/tennis`. They came with one correction: `side_of` was written the other way round there (it called
+# east "right" for a north-facing player, who is facing south with east on their left) and `lateral_name` and
+# `in_service_box` on this branch both say otherwise. One of the two had to give, and the two that agree won.
+#
+# The constants are the hitter's own scatter, in feet, and they are why the corners are where they are:
+CORNER_SLACK = 4.0         # feet inside the lines for a player who can put the ball where they look
+SCATTER_PER_DEGREE = 6.0   # feet of landing error per degree of face error, measured at rally depth (~70ft)
+SCATTER_SIGMAS = 2.0       # how many of the hitter's own standard deviations to stay inside the line by
+AZIMUTH_SIGMA = 9.0        # degrees of aim error at zero control, times (1 - control)
+AZIMUTH_PER_DEGREE = 1.30  # feet of landing error across the court per degree, at rally depth
+SIDE_SIGMAS = 1.6          # how far inside the sideline to aim, in the hitter's OWN lateral sigmas
+SIDE_SLACK_MIN = 4.0       # and never closer to the paint than this
+SERVE_SLACK = 3.0          # feet inside the service line and the sideline for hands that can put it there
+SHOT_KINDS = ("cross", "line", "drop", "lob", "approach")
+REPEAT_FEET = 8.0          # two balls aimed this close together are the same ball
+RECOVER_DEPTH = 1.6        # feet behind the baseline a player recovers to
+VOLLEY_ZONE = 12.0         # feet from the net inside which a player is at the net, not on the baseline
+
+
+def corners_of(north: bool, control: float = 1.0) -> tuple[tuple[float, float], tuple[float, float]]:
+    """The two deep corners of the court the player at that end is defending — or, for a player whose hands are
+    not yet reliable, corners moved in to where their own scatter leaves the ball in.
+
+    The margin is a couple of standard deviations of the hitter's own face error expressed in feet. It used to be
+    `4 + 11*(1-control)`, and at the control a practised player actually has (0.83) that is 5.9ft against a
+    measured landing scatter of 4.3ft, so about a fifth of every ball went long and 21 points in 24 ended on a
+    miss rather than on a winner. That single number is most of the difference between a rally of two shots and a
+    rally of ten: nothing about the swing changed, the target moved to where the hands could put it."""
+    sd = SCATTER_PER_DEGREE * 4.0 * (1.0 - control)      # feet, one standard deviation of the landing point
+    slack = min(18.0, max(CORNER_SLACK, SCATTER_SIGMAS * sd))
+    lateral = AZIMUTH_PER_DEGREE * AZIMUTH_SIGMA * (1.0 - control)   # feet, one sigma across the court
+    side = min(18.0, max(SIDE_SLACK_MIN, SIDE_SIGMAS * lateral))
+    x = slack if north else LENGTH - slack
+    return ((x, side), (x, WIDTH - side))
+
+
+def side_of(y: float, north: bool) -> str:
+    """Which side of their own body a ball at y is on, for the player at that end. A player at the north end
+    faces south, and facing south puts east on their left — which is `lateral_name`'s rule and this one; the
+    branch this came from had it the other way round, so its "aim at their backhand" line aimed at the forehand."""
+    return "left" if (y > WIDTH / 2) == north else "right"
+
+
+def placement(p: Player, receiver: Player, at, record: dict) -> tuple[float, float]:
+    """Where to hit it.
+
+    The rule is the founder's: go to the far corner the receiver is further from; if the two corners are within a
+    few feet of equidistant, go at the side that has been winning points against them; with no history to go on,
+    go at a right-hander's backhand, which is their left. `at` is where the receiver's feet are, which the engine
+    knows because it is the engine that made them run."""
+    c_north, c_south = corners_of(receiver.north, p.hands())
+    d = [math.hypot(c[0] - at[0], c[1] - at[1]) for c in (c_north, c_south)]
+    if abs(d[0] - d[1]) >= 4.0:
+        return c_north if d[0] > d[1] else c_south
+    rec = record.get(receiver.name) or {"left": [0, 1], "right": [0, 1]}
+    rate = {s: (rec[s][0] + 0.5) / (rec[s][1] + 1.0) for s in ("left", "right")}
+    side = "left" if rate["left"] >= rate["right"] else "right"
+    for c in (c_north, c_south):
+        if side_of(c[1], receiver.north) == side:
+            return c
+    return c_north
+
+
+def aim_serve(p: Player, target, surface: str, wind, face: float = 6.0) -> tuple[float, float]:
+    """The face is chosen, the power is searched, and that is the other way round from a groundstroke.
+
+    `aim_at` bisects the face to find a depth and leaves the power alone, which is right for a ball struck from
+    three feet: the face sets everything. A serve is struck from 8.8ft with the face nearly fixed by the rule
+    that you hit down on it, and the depth is set by how hard it is hit — a first serve at 66mph and one at 84mph
+    differ in length by twenty feet. Bisecting power at a face of six degrees is what a server actually does, and
+    it is why so many serves used to land in the net: the search raised the face to its ceiling trying to find a
+    depth that only a harder ball could reach.
+
+    Returns the face it used and the power it found."""
+    fwd = 1.0 if p.north else -1.0
+    p0 = contact_point(p, "serve")
+    lo, hi = 45.0, 105.0
+    for _ in range(18):
+        mid = (lo + hi) / 2
+        probe = strike(p, None, face=face, power=mid, aim=target[1], shot="serve",
+                       surface=surface, wind=wind, clean=True,
+                       aim_dist=math.hypot(target[0] - p0[0], target[1] - p0[1]))
+        land = probe["traj"].get("land")
+        if land is None:
+            lo = mid                                # netted or lost: hit it harder
+            continue
+        short = (land[0] - target[0]) * fwd
+        if abs(short) < 0.6:
+            break
+        if short < 0:
+            lo = mid
+        else:
+            hi = mid
+    return face, max(45.0, min(105.0, (lo + hi) / 2))
+
+
+def serve_corners(north: bool, control: float = 1.0):
+    """The two far corners of the service box, one on each side of the centre line. "Far" is the deep pair — the
+    service line, tight to each sideline — because that is the ball that pulls the receiver out of the court, and
+    the margin opens with the server's own error for the same reason the groundstroke corners do."""
+    slack = min(8.0, SERVE_SLACK + 6.0 * (1.0 - control))
+    x = NET_X + SERVICE_LINE - slack if north else NET_X - SERVICE_LINE + slack
+    return ((x, slack), (x, WIDTH - slack))
+
+
+def _not_the_same_ball_twice(plan: dict, last, rng) -> dict:
+    """The founder, 2026-11-11: "Too frequently, your players hit one return after another to the same spot on the
+    court. That doesn't happen. *Maybe* twice in a row, but even that rarely."
+
+    He is right, and the engine was doing it because every rule in it is a rule about the *situation* and the
+    situation barely changes: the receiver recovers to the middle of their baseline, so the far corner is the same
+    corner, so the ball goes to the same place for as long as the rally lasts. So: if this ball is within eight
+    feet of the last ball this player aimed at in this rally, send it to the mirror on the other side instead —
+    eight times in ten. The other two are the times it works, and a player who never repeats is as readable as one
+    who always does."""
+    if last is None:
+        return plan
+    t = plan["target"]
+    if math.hypot(t[0] - last[0], t[1] - last[1]) >= REPEAT_FEET:
+        return plan
+    r = rng.random()
+    if r < 0.20:
+        return plan
+    if r < 0.80:
+        y = WIDTH - t[1]
+        if not (5.0 <= y <= WIDTH - 5.0):
+            y = WIDTH / 2 + (5.5 if t[1] < WIDTH / 2 else -5.5)
+        return dict(plan, target=(t[0], y), varied="side")
+    deeper = 12.0 if t[0] > NET_X else -12.0
+    x = t[0] + deeper
+    lo, hi = (NET_X + 10.0, LENGTH - 5.0) if t[0] > NET_X else (5.0, NET_X - 10.0)
+    return dict(plan, target=(min(hi, max(lo, x)), t[1]), varied="length")
+
+
+def choose_shot(p: Player, other: Player, at_hitter, at_receiver, record: dict, rng,
+                height: float | None = None, last=None) -> dict:
+    """Which ball to play: kind, target, pace. Randomised within what the situation allows.
+
+    Three situations, and they are the ones a player actually reads: the other player is at the net, so the ball
+    must go past them or over them; the hitter is behind the baseline, so the safe ball is a drive; the hitter is
+    inside the court on a short ball, which is the one moment a player can choose freely. Everything is scaled by
+    the hitter's hands: a beginner's drop shot is a short ball in the middle of the court that the other player
+    eats, so they do not attempt many."""
+    skill = p.hands()
+    own_base = 2.0 if p.north else LENGTH - 2.0
+    behind = abs(at_hitter[0] - own_base) < 9.0
+    other_net = abs(at_receiver[0] - NET_X) < 15.0
+    opp_side = side_of(at_receiver[1], other.north)
+    c_near, c_far = corners_of(other.north, skill)
+    cross = placement(p, other, at_receiver, record)
+    line = c_near if side_of(c_near[1], other.north) == opp_side else c_far
+
+    if height is not None:
+        if height >= 5.0:
+            w = {"cross": 0.30, "line": 0.24, "drop": 0.26 * (0.4 + skill), "lob": 0.20, "approach": 0.0}
+        elif height >= 3.4:
+            w = {"cross": 0.36, "line": 0.26, "drop": 0.18 * (0.4 + skill), "lob": 0.20, "approach": 0.0}
+        else:
+            w = {"cross": 0.34, "line": 0.18, "drop": 0.0, "lob": 0.48, "approach": 0.0}
+    elif other_net:
+        w = {"lob": 0.42, "cross": 0.33, "line": 0.25, "drop": 0.0, "approach": 0.0}
+    elif behind:
+        w = {"cross": 0.56, "line": 0.24, "drop": 0.06 * (0.4 + skill), "lob": 0.10, "approach": 0.04}
+    else:
+        w = {"cross": 0.34, "line": 0.30, "drop": 0.14 * (0.4 + skill), "lob": 0.04, "approach": 0.18}
+    total = sum(w.values())
+    r = rng.random() * total
+    kind = "cross"
+    for k in SHOT_KINDS:
+        r -= w[k]
+        if r <= 0:
+            kind = k
+            break
+
+    fwd = 1.0 if p.north else -1.0
+    pace = 1.0 if height is None else 0.80          # a volley is a punch, not a swing
+    if kind == "cross":
+        return _not_the_same_ball_twice({"kind": kind, "target": cross,
+                                         "power": rng.uniform(58, 76) * pace}, last, rng)
+    if kind == "line":
+        return _not_the_same_ball_twice({"kind": kind, "target": line,
+                                         "power": rng.uniform(62, 80) * pace}, last, rng)
+    if kind == "approach":
+        return _not_the_same_ball_twice({"kind": kind, "target": line,
+                                         "power": rng.uniform(48, 62) * pace}, last, rng)
+    if kind == "drop":
+        if abs(at_receiver[1] - WIDTH / 2) > 3:
+            y = min(WIDTH - 4.0, max(4.0, WIDTH - at_receiver[1]))
+        else:
+            y = rng.choice((5.5, WIDTH - 5.5))
+        depth = rng.uniform(5, 9) if height is not None else rng.uniform(8, 13)
+        return _not_the_same_ball_twice({"kind": kind, "target": (NET_X + fwd * depth, y),
+                                         "power": rng.uniform(26, 34) * pace}, last, rng)
+    y = WIDTH - 5.5 if at_receiver[1] < WIDTH / 2 else 5.5
+    return _not_the_same_ball_twice({"kind": kind, "target": (LENGTH - 6.0 if p.north else 6.0, y),
+                                     "power": rng.uniform(40, 52) * pace}, last, rng)
+
+
+def recovery_spot(p: Player, at_hitter, came_in: bool) -> tuple[float, float]:
+    """Where the player goes after they hit, which is never where they hit from.
+
+    The founder, 2026-11-11: "the court in front of the baseline is never used by good players to receive the next
+    shot, because the opposing player will fire to one of the back corners and the receiver won't be able to get to
+    it." A player who has been dragged wide recovers behind the baseline to the centre; a player who has just hit
+    an approach shot goes the other way, forward to the net, because that is what the shot was for."""
+    if came_in:
+        return (NET_X - 7.0 if p.north else NET_X + 7.0, WIDTH / 2)
+    return (-RECOVER_DEPTH if p.north else LENGTH + RECOVER_DEPTH, WIDTH / 2)
+
+
 def line_for(shot: dict, receiver: str, surface: str, wind: tuple[str, float]) -> str:
     p = shot["player"]
     t = shot["traj"]
@@ -727,18 +958,36 @@ def in_service_box(land, server_north: bool, side: str) -> bool:
 
 
 def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in, rng) -> list[str]:
-    """One point, in the order it happened."""
-    lines, side = [], 2.0 if server.north else LENGTH - 2.0
-    aim_err = 7.0 * (1 - server.skill("control"))
-    side = "left" if rng.random() < 0.5 else "right"
-    # "left" is the server's left, and a player facing the other way has east and west the other way round.
-    # The first version aimed a north server's left serve at the west sideline while the box check called west
-    # his right, so a serve that landed exactly where it was aimed was scored a fault.
-    frac = 0.75 if (side == "left") == server.north else 0.25
-    target = (NET_X + 8 + rng.uniform(-3, 9), WIDTH * frac + rng.gauss(0, aim_err))
-    face, power = aim_at(server, target, "serve", surface, wind_vec, power=66 + 18 * rng.random())
-    shot = strike(server, None, face=face, power=power, aim=target[1],
-                  shot="serve", surface=surface, wind=wind_vec)
+    """One point, in the order it happened.
+
+    Every shot is now chosen rather than dialled. Until 2026-11-15 this function picked a depth between four and
+    thirty-four feet past the net and a width at one fifth or four fifths of the court, per shot, at random — which
+    is not a player, it is a scattergun, and it was why a point averaged two shots. The two players also had no
+    position: each shot was struck from `contact_point`, which is behind their own baseline, and the player who
+    had to reach it was placed on their mark, so a ball hit from the forecourt was received by somebody standing
+    at the baseline in the middle.
+
+    Now `where` carries both players' feet, `choose_shot` reads the situation from them, and `recovery_spot` moves
+    the hitter back (or in, after an approach) before the next ball is chosen. That position is what `interception`
+    is asked about, so the runner starts where their legs actually left them."""
+    lines, where = [], {}
+    for p in (server, receiver):
+        where[p.name] = (2.0 if p.north else LENGTH - 2.0, WIDTH / 2)
+    record = {}                                  # corner histories: empty per point, so the backhand rule decides
+    last: dict[str, tuple | None] = {server.name: None, receiver.name: None}
+
+    # The serve goes to a far corner of the service box, one side or the other at random. The founder's rule,
+    # 2026-11-10, and the reason the old frac/aim_err arithmetic is gone: it aimed at a width and a depth and let
+    # the hands decide, which served into the net three times in five.
+    corners = serve_corners(server.north, server.hands())
+    c = corners[0] if rng.random() < 0.5 else corners[1]
+    side = "left" if (c[1] > WIDTH / 2) == server.north else "right"
+    # the face varies a little from serve to serve, and the power search absorbs the difference: a server does not
+    # put the racquet through the same angle twenty times, and a film of twenty identical serves is a metronome
+    face, power = aim_serve(server, c, surface, wind_vec, face=rng.uniform(4.0, 8.0))
+    _p0 = contact_point(server, "serve")
+    shot = strike(server, None, face=face, power=power, aim=c[1], shot="serve", surface=surface, wind=wind_vec,
+                  aim_dist=math.hypot(c[0] - _p0[0], c[1] - _p0[1]))
     server.serves += 1
     lines.append(line_for(shot, receiver.name, surface, wind_in))
     t = shot["traj"]
@@ -747,27 +996,28 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
         lines.append(f"fault — the point goes to {receiver.name}.")
         return lines
     server.serves_in += 1
+    where[server.name] = (2.0 if server.north else LENGTH - 2.0, WIDTH / 2)
     incoming = t["bounce"]
     incoming["speed_in"] = t["bounce"]["speed_out"] / MPH
+
     for shot_no in range(1, RALLY_CAP + 1):
         if shot_no > 1:
-            ok, why = reachable(receiver, t["land"], t["time"], t["bounce"], surface)
+            ok, why = reachable(receiver, t["land"], t["time"], t["bounce"], surface,
+                                frm=where[receiver.name])
             if not ok:
                 lines.append(f"{receiver.name} is {why} — {server.name} takes the point.")
                 server.winners += 1
                 return lines
-        kind = rng.choice(["forehand", "backhand", "backhand", "forehand"])
-        # "4 to 34 feet past the net" is a distance from the net, and the net is on the other side of the court
-        # depending on which end you are hitting from. This line used to add to NET_X for both seats, so a south
-        # player was aimed four to thirty-four feet *behind themselves* and bisected onto the tallest face the
-        # search had: their returns landed on their own side, which is why a season of point-by-point matches
-        # averaged 1.2 shots and read as two beginners who could not rally. Found 2026-11-15 while trying to
-        # measure how often a ball goes unreached — there were almost no in-court balls in a point to measure.
-        depth = NET_X + rng.uniform(4, 34) if receiver.north else NET_X - rng.uniform(4, 34)
-        wide = WIDTH * (0.2 if rng.random() < 0.5 else 0.8) + rng.gauss(0, 9 * (1 - receiver.skill("control")))
-        face, power = aim_at(receiver, (depth, wide), kind, surface, wind_vec, power=rng.uniform(40, 72))
-        shot = strike(receiver, incoming, face=face, power=power, aim=wide,
-                      shot=kind, surface=surface, wind=wind_vec)
+        at_net = abs(where[receiver.name][0] - NET_X) < VOLLEY_ZONE
+        plan = choose_shot(receiver, server, where[receiver.name], where[server.name], record, rng,
+                           height=3.6 if at_net else None, last=last[receiver.name])
+        last[receiver.name] = plan["target"]
+        kind = "volley" if at_net else rng.choice(["forehand", "backhand", "backhand", "forehand"])
+        face, power = aim_at(receiver, plan["target"], kind, surface, wind_vec, power=plan["power"])
+        _p0 = contact_point(receiver, kind)
+        shot = strike(receiver, incoming, face=face, power=power, aim=plan["target"][1],
+                      shot=kind, surface=surface, wind=wind_vec,
+                      aim_dist=math.hypot(plan["target"][0] - _p0[0], plan["target"][1] - _p0[1]))
         lines.append(line_for(shot, server.name, surface, wind_in))
         t = shot["traj"]
         if t.get("land") is None or not (NET_X < t["land"][0] < LENGTH if receiver.north
@@ -776,6 +1026,8 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
             lines.append(f"{receiver.name} loses the point.")
             server.winners += 1
             return lines
+        # Where the feet are next time: back behind the baseline, or in behind an approach shot.
+        where[receiver.name] = recovery_spot(receiver, shot["contact"], plan["kind"] == "approach")
         incoming = t["bounce"]
         incoming["speed_in"] = t["bounce"]["speed_out"] / MPH
         server, receiver = receiver, server
