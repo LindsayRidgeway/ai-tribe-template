@@ -768,6 +768,12 @@ file is removed, and the working tree is exactly as it was. You will see which m
 
 **Files you add yourself are never touched**, because the update only knows about the files the template ships.
 
+**You can do the same thing from the page, with no terminal.** Open your tribe: under the update line there are
+two buttons. The first reads the template and says exactly what would change — *"2 files will be replaced; 1 left
+alone because you changed it"* — and writes nothing. The second writes. They touch the same files as the command and
+obey the same rule, because they read the template's own published list of what an update may write; and a file you
+edited is left alone and named, not overwritten. If nothing is out of date, the buttons do not appear at all.
+
 **A file the project has retired is listed, never deleted.** If the template stops shipping something, the update
 prints it as retired, with the reason and the date, and leaves it on disk. Deleting it is a decision, made by you,
 by passing `--prune` — and the same validation gate applies to the result. A copier that deletes things quietly is
