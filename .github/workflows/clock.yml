@@ -142,17 +142,13 @@ jobs:
           TRIBE_API_KEY_ANTHROPIC: ${{ secrets.TRIBE_API_KEY_ANTHROPIC }}
         run: |
           set -euo pipefail
-          # A tester following RUN.md adds ONE key. The clock wakes one member per world, so without this
-          # every other turn went to a member whose model could not be reached and was recorded as a
-          # failure that was not the member's — a colony that looks broken on its first day. Skipping is
-          # honest: the turn goes to somebody who can answer, and the reason is printed (on stderr, so it
-          # is not read as a turn).
-          KEYED=""
-          [ -n "${TRIBE_API_KEY_DEEPSEEK:-}" ] && KEYED="$KEYED deepseek"
-          [ -n "${TRIBE_API_KEY_GEMINI:-}" ] && KEYED="$KEYED gemini"
-          [ -n "${TRIBE_API_KEY_QWEN:-}" ] && KEYED="$KEYED qwen"
-          echo "keys for:${KEYED:- none — every member will be skipped}"
-          python3 tribe.py next --force "${{ inputs.force }}" --keyed "$KEYED" | tee /tmp/turn.txt
+          # Which engines this step can actually reach is read off its own environment by the tool. Until
+          # 2026-11-15 it was a hand-written three — deepseek, gemini, qwen — sitting directly above the ten keys
+          # this same step forwards, so a member on Anthropic or OpenRouter was skipped every turn while the log
+          # said "keys for: deepseek". That is the four-of-ten `env:` defect one line further down: a copy of a
+          # fact that nothing checked against its source. `--keyed-from-env` prints what it found, so the log
+          # still says "keys for: ..." and now the line is produced by the thing that uses it.
+          python3 tribe.py next --force "${{ inputs.force }}" --keyed-from-env | tee /tmp/turn.txt
           echo "count=$(wc -l < /tmp/turn.txt)" >> "$GITHUB_OUTPUT"
 
       - name: One free wake in each world

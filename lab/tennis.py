@@ -354,7 +354,7 @@ def aim_at(p: Player, target, shot: str, surface: str, wind, power: float) -> tu
 # What a player can reach without moving, and how high. The racquet is 27in and a swung arm puts the middle of
 # the strings about 3ft from the hips, which is the number the interception measures from; the high one is
 # where an overhead stops being an overhead and a ball stops being returnable at all.
-RACQUET_REACH = 6.0
+RACQUET_REACH = 7.0
 RACQUET_HIGH = 9.0
 STEP = 0.02                           # s; the slice the ball's plan is stepped in, and why a miss is measured in tenths
 # Two costs that are not distance and that the first version of this rule ignored entirely. A player does not
@@ -362,14 +362,16 @@ STEP = 0.02                           # s; the slice the ball's plan is stepped 
 # And a ball met at a full sprint is a frame, not a shot — the feet have to plant before the swing, which is the
 # 'brake' the movement list already owed. Both are charged here, in seconds, against the time available.
 #
-# The six feet is a standing lunge, not a dive: three feet of arm and racquet plus the step you take *as* you
-# reach. It is deliberately at the generous end of plausible because this model gives the player no anticipation
-# at all — the real player knows roughly where the ball is going from the swing before it leaves the strings, and
-# that knowledge is worth more than a foot of arm. Calibrated 2026-11-15 against 600 balls the engine itself
-# struck: at these three numbers a beginner reaches 74% of them and a member with six hundred balls reaches 93%,
-# and in 150-point matches the member at 300 and at 600 balls is beaten on 18-28% of the balls they have to get
-# to. That is the band this was built for; with a three-foot radius the same matches were 56% and nobody could
-# play, and with the old shortcut they were zero.
+# The seven feet is a standing lunge, not a dive: three feet of arm and racquet, plus the first step you take as
+# you reach. It is deliberately at the generous end of plausible because this model gives the player no
+# anticipation at all — the real player knows roughly where the ball is going from the swing before it leaves the
+# strings, and that knowledge is worth more than a foot of arm — and because the step is charged for twice: once
+# here as distance and once above as REACTION. Calibrated 2026-11-15 against 600 balls the engine itself struck
+# (`/tmp/pop10.py`, 600 fixed balls, every skill level asked about the same ones): with these three numbers a
+# player who has hit nothing reaches 74% of them and one with six hundred balls reaches 95%; the old shortcut
+# reached 100% of every one of them at every skill level, which is the defect. In 150-point matches the member at
+# 300 and at 600 balls is beaten on 18-28% of the balls they have to get to. With a three-foot radius those
+# matches were 56% and nobody could play; that is what the guard in the backlog is for.
 REACTION = 0.25
 SETTLE = 0.20
 
@@ -382,26 +384,36 @@ def movement_speed(p: Player) -> float:
     return 5.0 + 15.0 * p.skill("reach")
 
 
-def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str,
-              home_x: float | None = None, court_len: float | None = None,
-              court_wid: float | None = None) -> tuple[bool, str]:
-    """Can the player get to the ball before it has gone past them?
+def interception(p: Player, land, flight_time: float, bounce: dict, surface: str,
+                 home_x: float | None = None, court_len: float | None = None,
+                 court_wid: float | None = None, frm=None) -> dict:
+    """The interception itself, as numbers: did the player get there, how much of the ground did the clock
+    allow, and where do the feet come to rest.
 
-    Player and ball close on each other, so the question is when they meet, not how far the ball landed. The
-    receiver stands in the middle of their own baseline; the ball lands and then travels; the player runs. The
-    speed that matters is the player's, plus how fast the ball is coming *at them* — which is the component of
-    the ball's velocity along the line from the landing point to the player. A ball hit straight back at you
-    closes fast and you barely have to move; a ball hit wide crosses in front of you and does not come to you at
-    all, so it is your own legs against the flight.
+    `reachable()` is the yes/no built on this and nothing else, because a renderer that draws a player arriving
+    short and a rule that says "did not reach" have to be the same arithmetic. There used to be two models of
+    this — this one, and an `intercept()` on the branch that produced the 3D records — and they disagreed by
+    more than a racquet's length, which is exactly the kind of split that makes a picture argue with a scoreline.
+
+    `frm` is where the player actually is when the ball is struck, in court coordinates; without it they are on
+    their mark in the middle of their own baseline. It is not decoration: a player who has just hit a ball from
+    the forecourt is not standing on the baseline, and a record that says they are is a record that teleports.
+
+    Player and ball close on each other, so the question is when they meet, not how far the ball landed. A ball
+    hit straight back at you closes fast and you barely have to move; a ball hit wide crosses in front of you and
+    does not come to you at all, so it is your own legs against the flight.
 
     The first version compared the distance to the landing point against a radius that grew with skill. That got
     short balls exactly backwards — a ball landing in the service box was 21ft away across the court and was
     called unreachable, when in fact it bounces and comes back to you — and it failed players for something that
     was neither visible nor theirs to control, which is the one thing a rule in this game must never do."""
-    default_home = 2.0 if p.north else LENGTH - 2.0
-    hx = default_home if home_x is None else (home_x if p.north else (court_len or LENGTH) - home_x)
     court_w = WIDTH if court_wid is None else court_wid
-    hy = court_w / 2.0
+    if frm is not None:
+        hx, hy = frm[0], frm[1]
+    else:
+        default_home = 2.0 if p.north else LENGTH - 2.0
+        hx = default_home if home_x is None else (home_x if p.north else (court_len or LENGTH) - home_x)
+        hy = court_w / 2.0
     speed = movement_speed(p)
 
     # THE INTERCEPTION, not a shortcut. Everything below asks one question at every 0.02s slice of the ball's
@@ -419,15 +431,20 @@ def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str,
     vx, vy, vz = bounce["v"]
     vz = abs(vz)                        # a hand-written record can carry the pre-bounce sign; the ball goes up
     t = 0.0
-    best = None                         # (shortfall in seconds, dx, dy) at the closest the player ever got
+    best = None                         # (shortfall, dx, dy, t, ball point) at the closest the player ever got
     while t <= 4.0:
         if z <= RACQUET_HIGH:           # a ball above nine feet is not intercepted, it is smashed — later
-            need = max(0.0, math.hypot(hx - x, hy - y) - RACQUET_REACH) / speed + SETTLE
-            short = need - (flight_time + t - REACTION)
+            gap = math.hypot(hx - x, hy - y)
+            need = max(0.0, gap - RACQUET_REACH) / speed + SETTLE
+            have = flight_time + t - REACTION
+            short = need - have
             if best is None or short < best[0]:
-                best = (short, hx - x, hy - y)
+                best = (short, hx - x, hy - y, t, (x, y, z))
             if short <= 0.0:
-                return True, ""
+                return {"ok": True, "need": need, "have": have, "short": 0.0, "short_ft": 0.0,
+                        "dx": hx - x, "dy": hy - y, "speed": speed, "at": flight_time + t,
+                        "meet": (round(x, 3), round(y, 3), round(z, 3)), "gap": gap,
+                        "got": _run_to((hx, hy), (x, y), max(0.0, gap - RACQUET_REACH)), "why": ""}
         if t > 0.0 and z <= 0.0:        # the second bounce: the ball is dead and the chance has gone
             break
         rel = math.sqrt(vx * vx + vy * vy + vz * vz)
@@ -436,11 +453,38 @@ def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str,
         vx, vy, vz = vx + ax * STEP, vy + ay * STEP, vz + az * STEP
         t += STEP
 
-    short, dx, dy = best
+    short, dx, dy, t_best, ball = best
+    short_ft = short * speed
     # The direction is the direction of the miss at the closest moment, not at the landing point: a ball that
     # lands in the middle and bounces away sideways beats you wide, and the old string called it deep.
-    return False, (f"{max(1.0, short * speed):.0f}ft short of it, beaten by the "
-                   f"{'wide' if abs(dy) > abs(dx) else 'deep'} ball")
+    why = (f"{max(1.0, short_ft):.0f}ft short of it, beaten by the "
+           f"{'wide' if abs(dy) > abs(dx) else 'deep'} ball")
+    # Where the feet came to rest: as far along the line to the ball as the clock allowed, never past it.
+    allowed = max(0.0, flight_time + t_best - REACTION - SETTLE) * speed
+    return {"ok": False, "need": short + (flight_time + t_best - REACTION), "have": flight_time + t_best - REACTION,
+            "short": short, "short_ft": short_ft, "dx": dx, "dy": dy, "speed": speed,
+            "at": flight_time + t_best, "meet": ball, "gap": math.hypot(dx, dy),
+            "got": _run_to((hx, hy), ball, allowed), "why": why}
+
+
+def _run_to(frm, to, ground: float):
+    """The point `ground` feet from `frm` along the line to `to`, and not past it. Used to put a beaten player's
+    feet where their legs actually brought them, which is the whole difference between a picture that shows a
+    player losing a point and one that teleports them to the ball."""
+    dx, dy = to[0] - frm[0], to[1] - frm[1]
+    d = math.hypot(dx, dy)
+    if d < 1e-6:
+        return (round(frm[0], 3), round(frm[1], 3))
+    k = min(ground, d) / d
+    return (round(frm[0] + dx * k, 3), round(frm[1] + dy * k, 3))
+
+
+def reachable(p: Player, land, flight_time: float, bounce: dict, surface: str,
+              home_x: float | None = None, court_len: float | None = None,
+              court_wid: float | None = None, frm=None) -> tuple[bool, str]:
+    """Did the player get to it, and if not, the sentence that says by how much and which way."""
+    m = interception(p, land, flight_time, bounce, surface, home_x, court_len, court_wid, frm)
+    return m["ok"], m["why"]
 
 
 # ---- the season: practice that outlives the process ------------------------------------------------

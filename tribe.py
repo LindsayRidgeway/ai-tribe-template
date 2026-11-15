@@ -13,6 +13,7 @@ improvising around a missing identity. This is the schema as executable code rat
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import sys
@@ -554,6 +555,28 @@ def api_of(d: Path) -> str:
     return ""
 
 
+# What the last `next_up()` refused to wake, and why — so the command's own summary does not contradict the
+# line above it. On 2026-11-15 `next` printed "Probe is on gemini and this repository has no key for it" and then,
+# two lines later, "every member was skipped: no member has a voice.md, or none has a key here": the guess landing
+# on top of the fact, in the first message a new owner reads.
+LAST_SKIPPED: list[tuple[str, str]] = []
+
+
+def keyed_from_env(prefix: str = "TRIBE_API_KEY_") -> str:
+    """The vendors this process actually has a key for, read off its own environment.
+
+    The clock used to be told this by hand, in the workflow: three engines — deepseek, gemini, qwen — named in a
+    list sitting directly above the ten keys the same step hands the process. So a member on Anthropic, OpenAI,
+    OpenRouter, Groq, Mistral, Cerebras or Together could be reached by the runner and was skipped every turn,
+    with the log saying "keys for: deepseek" — a sentence true about the list and false about the world, which is
+    the same defect as a four-of-ten `env:` block one line further up. A list of what is present cannot be kept
+    in step by hand when the thing it describes *is* the environment the step runs in.
+    """
+    found = sorted({k[len(prefix):].lower() for k, v in os.environ.items()
+                    if k.startswith(prefix) and v.strip()})
+    return " ".join(found)
+
+
 def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     """Whose turn it is, one member per place: the one with the fewest wakes.
 
@@ -563,6 +586,7 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     which is arbitrary and *recorded* as arbitrary — the alternative (a roster in a file) is a roster
     somebody edits to favour somebody.
     """
+    LAST_SKIPPED.clear()
     forced = [n.strip() for n in force.replace(",", " ").split() if n.strip()]
     if forced:
         # The human's hand on the glass: name a member and it wakes now, wherever it stands. Every ant
@@ -617,6 +641,7 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     for name, vendor in skipped:
         print(f"   {name} is on {vendor} and this repository has no key for it — skipped, not failed",
               file=sys.stderr)
+    LAST_SKIPPED[:] = skipped
     return out
 
 
@@ -776,6 +801,9 @@ def main() -> int:
     p_next.add_argument("--keyed", default="",
                         help="vendors this repository has a key for (comma separated). Members on a vendor "
                              "that is not here are skipped rather than woken into a certain failure")
+    p_next.add_argument("--keyed-from-env", action="store_true",
+                        help="read the same list off this process's own TRIBE_API_KEY_* variables — what a "
+                             "runner should do, instead of a hand-written list that can fall behind them")
     args = ap.parse_args()
 
     if args.cmd == "new":
@@ -833,7 +861,18 @@ def main() -> int:
     if args.cmd == "fresh":
         return fresh(args.name, args.place, args.confirm)
     if args.cmd == "next":
-        rows = next_up(args.force, args.keyed)
+        keyed = args.keyed
+        if getattr(args, "keyed_from_env", False):
+            if keyed:
+                print("!! --keyed and --keyed-from-env both name the vendors; pass one of them", file=sys.stderr)
+                return 2
+            keyed = keyed_from_env()
+            # The runner's log has said "keys for: ..." since the list was hand-written; it says it still, and now
+            # it is said by the thing that uses the list rather than by the line above it.
+            print(f"keys for: {keyed}" if keyed else
+                  "keys for: none — a wake with no key fails at its first call and names the key it wanted",
+                  file=sys.stderr)
+        rows = next_up(args.force, keyed)
         for row in rows:
             print("\t".join(row))
         if not rows:
@@ -851,6 +890,8 @@ def main() -> int:
             elif not member_dirs():
                 print("   there are no members at all — `tribe.py new <name>` makes the first one.",
                       file=sys.stderr)
+            elif LAST_SKIPPED:
+                pass   # the lines above named each member and its engine; a generic guess would bury them
             else:
                 print("   every member was skipped: no member has a voice.md, or none has a key here. "
                       "`tribe.py status` shows which.", file=sys.stderr)

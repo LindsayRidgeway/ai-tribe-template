@@ -609,6 +609,11 @@ Four facts, all of them measured rather than assumed:
   entitled to know its sentence was not honoured.
 - **A picture is a file in your repository, and a repository is not a hard disk.** Every clone carries every byte
   for ever, so anything over 4 MB is refused with its size named rather than committed.
+- **On a private tribe the picture opens in the repository rather than appearing on the page,** and the card says
+  so in one sentence. A private repository's file needs your token to be fetched, and fetching it would mean image
+  bytes passing through a page that otherwise holds no copy of your tribe — so the page links to the file instead.
+  This was designed this way and was silent about it until 2026-11-15, which made a working behaviour read as a
+  broken page. On a public tribe the picture renders where you asked for it.
 
 If the picture belongs to a piece on the member's shelf, name the piece in the form instead of writing a sentence:
 the sentence then comes from that piece's own `commission:` line, read from the file and shown read-only. That is
