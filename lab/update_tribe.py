@@ -137,6 +137,36 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
 
 
+def validates(root: Path) -> tuple[bool, str]:
+    """Run the tribe's own validator on what an update just wrote.
+
+    An update that copies files and commits is an update that can commit a broken tribe: the machinery is
+    a set of scripts that import each other, and one of them being half-new is exactly the state a copy
+    leaves behind. So the validator decides whether the commit happens. Used as a gate, not a report —
+    a green line after the commit would be a note in a log nobody reads at the moment it matters.
+    """
+    r = subprocess.run([sys.executable, "tribe.py", "validate"], cwd=root,
+                       capture_output=True, text=True, check=False)
+    tail = (r.stdout + r.stderr).strip().splitlines()
+    return r.returncode == 0, " | ".join(tail[-3:]) if tail else f"exit {r.returncode}"
+
+
+def roll_back(root: Path, changed: list[str], added: list[str]) -> None:
+    """Undo an update that did not validate: restore what was replaced, remove what was added.
+
+    `members.json` is in the set even though it is never *copied*: the update regenerates it from the
+    shelf, so a refused update would otherwise leave the derived list newer than the machinery that
+    derives it. Found by breaking a member on purpose and looking at `git status` afterwards.
+    """
+    restore = [p for p in changed + ["members.json"] if (root / p).exists() and git(root, "ls-files", "--error-unmatch", p).returncode == 0]
+    if restore:
+        git(root, "checkout", "--", *restore)
+    for rel in added:
+        p = root / rel
+        if p.exists():
+            p.unlink()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=str(ROOT), help="the tribe repository to update (default: this one)")
@@ -176,6 +206,13 @@ def main() -> int:
         print(f"members.json: {regenerate_members(root)}")
 
     if a.commit:
+        ok, said = validates(root)
+        if not ok:
+            roll_back(root, changed, added)
+            print(f"!! the updated tribe does not validate: {said}")
+            print("   rolled back — nothing was committed and nothing on disk was changed")
+            return 1
+        print(f"validates: {said}")
         git(root, "add", "-A")
         msg = (f"update: machinery from {TEMPLATE}@{BRANCH}\n\n"
                f"{len(added)} added, {len(changed)} replaced. Members, worlds, plates and issues are untouched —\n"
