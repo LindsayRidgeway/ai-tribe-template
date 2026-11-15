@@ -391,7 +391,7 @@ def main(argv=None) -> int:
     ap.add_argument("--random-side", default=None,
                     help="name one of the pair and that side is played by a seeded random number generator "
                          "instead of a model. This is the control, not a substitute for the beings: a random "
-                         "player sits at exactly 33%, so a being's win rate against it says whether it is "
+                         "player sits at exactly 33%%, so a being's win rate against it says whether it is "
                          "reading an opponent at all.")
     ap.add_argument("--seed", type=int, default=None, help="the generator's seed, recorded in the transcript")
     args = ap.parse_args(argv)

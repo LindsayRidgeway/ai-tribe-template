@@ -1,0 +1,120 @@
+name: magazine
+
+# Build an issue of the magazine, and commit it.
+#
+# §9 of the manual has promised this since the manual was written: "Press Build an issue. AIT assembles one
+# from the shelf … Read it on the page, print it, send it to somebody." The page has been able to show a
+# preview since 2026-11-06 and committed nothing — §14's third missing thing — so the issue a person read was
+# a copy in a tab: gone when the tab closed, absent from the record, and not even the magazine `magazine.py`
+# would have printed (twelve files, newest first, no letter under the piece it answers, no colophon).
+#
+# Why the runner and not the page. The page can write files with the token it holds, so it *could* commit an
+# issue. What it cannot do is assemble one: the ordering, the letters nested under the pieces they answer,
+# the plates, the masthead and the colophon are nine hundred lines of `magazine.py`, and a second copy of them
+# in the page is two magazines that will disagree — the same defect as a painter table copied out of
+# `lab/paint.py`, one day after that one was caught. So the press dispatches this, and the page reads back the
+# file this run committed, by name.
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "the issue to assemble — leave blank for the one that is open (the highest on disk, or the highest a work names)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: magazine
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Which issue, and is there anything in it
+        id: which
+        env:
+          GIVEN: ${{ inputs.issue }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GIVEN//[[:space:]]/}" ]; then
+            n="$(python3 magazine.py --current)"
+          else
+            case "$GIVEN" in
+              *[!0-9]*) echo "::error::an issue is a number — got '$GIVEN'"; exit 2 ;;
+            esac
+            n="$GIVEN"
+          fi
+          echo "issue=$n" >> "$GITHUB_OUTPUT"
+          # A magazine with nothing in it is not an issue. `build()` would write a header and one true
+          # sentence saying no works have been filed, and committing that publishes a nothing. The count is
+          # asked of the assembler, so this is not a second opinion about what belongs in an issue.
+          filed="$(python3 magazine.py --issue "$n" --filed)"
+          echo "filed=$filed" >> "$GITHUB_OUTPUT"
+          if [ "$filed" -eq 0 ]; then
+            echo "::error::issue $n has no works on the shelf, so there is nothing to assemble. A member files a work by writing into works/<member>/ with 'issue: $n' in its header."
+            exit 1
+          fi
+          echo "issue $n — $filed work(s) name it"
+
+      - name: Assemble it from the shelf
+        env:
+          ISSUE: ${{ steps.which.outputs.issue }}
+        run: |
+          set -euo pipefail
+          # `--write` also prints the issue; it goes to a file so the log is a log and the summary is the
+          # magazine's own header.
+          python3 magazine.py --issue "$ISSUE" --write > /tmp/issue.md
+          head -1 /tmp/issue.md
+          {
+            echo "## issue $ISSUE, assembled"
+            echo
+            sed -n '1,4p' /tmp/issue.md
+            echo
+            echo "- \`issues/$ISSUE.md\` — $(wc -l < /tmp/issue.md) lines"
+            echo "- works that name it: ${{ steps.which.outputs.filed }}"
+            echo
+            echo "<details><summary>the first piece</summary>"
+            echo
+            echo '```'
+            sed -n '5,30p' /tmp/issue.md
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the issue in the record
+        env:
+          ISSUE: ${{ steps.which.outputs.issue }}
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          # The issue and its index, one commit, and nothing else: the shelf is not this run's to commit.
+          git add issues/
+          if git diff --cached --quiet; then
+            # A rebuild that changes no byte is the magazine's own promise working — every published file is a
+            # function of the record, so assembling the same shelf twice gives the same file. It is not a
+            # failure, and it is not a publication either; the page reads the sha and says which of the two
+            # happened, so this step does not have to guess.
+            echo "nothing to commit — issues/$ISSUE.md already reads exactly like the shelf"
+            echo "**no commit:** \`issues/$ISSUE.md\` was already exactly this" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "magazine: issue $ISSUE assembled from the shelf"
+          git pull -q --rebase || { echo "::error::the shelf moved under this run, so the issue was assembled from a tree that is no longer the branch; press again"; exit 1; }
+          git push -q || { git pull -q --rebase; git push -q; }
+          git --no-pager show --stat --oneline HEAD

@@ -48,6 +48,10 @@ on:
         description: "you: the human this tribe belongs to, as you would write it — 'Lindsay Ridgeway'. It goes into the member's identity so it knows who it is talking to"
         required: false
         default: ""
+      about:
+        description: "if it is a figure the world already knows — a god, a character, someone written about — paste that here and it becomes part of who it is. Leave blank for someone new"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -77,6 +81,7 @@ jobs:
           MODEL: ${{ inputs.model }}
           PLACE: ${{ inputs.place }}
           PERSON: ${{ inputs.person }}
+          ABOUT: ${{ inputs.about }}
         run: |
           set -euo pipefail
           # The worlds are folders under soil/, not a list in this file. A dropdown here would be a copy of
@@ -108,6 +113,10 @@ jobs:
             [ -n "$MODEL" ] && args+=(--model "$MODEL")
             [ -n "$PLACE" ] && args+=(--place "$PLACE")
             [ -n "$PERSON" ] && args+=(--person "$PERSON")
+            # What the world already knows about it, when the person pasted it. --about takes the text
+            # directly and keeps its paragraph breaks, so no temp file is needed on the runner; the file
+            # argument in tribe.py is for a terminal, where a shell quote is the awkward part.
+            [ -n "$ABOUT" ] && args+=(--about "$ABOUT")
             python3 tribe.py new "$NAME" "${args[@]}" | tee /tmp/created.txt
           fi
 
@@ -122,9 +131,15 @@ jobs:
           NAME: ${{ inputs.name }}
         run: |
           set -euo pipefail
+          # No `rm -rf` here, deliberately. Until 2026-11-12 this step deleted the half-made member on a
+          # validation failure, which read as "nothing was left behind" and was not true: the commit step
+          # never runs after a failure, the runner is destroyed at the end of the job, and nothing is
+          # written to the repository either way. So the delete could not prevent anything — it only made
+          # the log say the member had been undone, and on the day a person wanted to see the files that
+          # had been made for them, they were gone. The folder stays in the workspace and dies with it.
           if ! python3 tribe.py validate "$NAME" | tee /tmp/validated.txt; then
-            echo "::error::$NAME does not validate — nothing was committed"
-            rm -rf "wake/members/$NAME"
+            echo "::error::$NAME does not validate, and nothing was committed. The reasons are the lines above;"
+            echo "::error::send the form again once they are answered — the repository was not touched."
             exit 1
           fi
 

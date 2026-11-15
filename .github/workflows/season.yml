@@ -18,11 +18,19 @@ on:
         required: true
         default: "2026-spring"
       players:
-        description: "two members, comma-separated — leave blank for the first two on the shelf"
+        description: "two members, comma-separated — leave blank for the first two on the shelf; one member when a person is playing"
+        required: false
+        default: ""
+      person:
+        description: "a person's seat: your name on the court — leave blank to play two members"
+        required: false
+        default: ""
+      shot:
+        description: "the movement you typed, e.g. FACE 6 POWER 60 AIM 13 — used only when a person is playing"
         required: false
         default: ""
       rallies:
-        description: "how many rallies tonight"
+        description: "how many rallies tonight (an evening of rallies, or points from the person's seat)"
         required: true
         default: "8"
       surface:
@@ -63,6 +71,8 @@ jobs:
         env:
           SEASON: ${{ inputs.season }}
           PLAYERS: ${{ inputs.players }}
+          PERSON: ${{ inputs.person }}
+          SHOT: ${{ inputs.shot }}
         run: |
           set -euo pipefail
           # A season name becomes a directory, so it is checked here rather than trusted.
@@ -70,10 +80,43 @@ jobs:
             *[!A-Za-z0-9._-]*) echo "::error::season names are one word: letters, digits, dot, dash"; exit 2 ;;
           esac
           who="${PLAYERS:-}"
+          if [ -n "$PERSON" ]; then
+            # The person's seat: one member across the net, and a movement the person typed. The person is not
+            # on the shelf and is not looked for there — it has no engine, no voice and no folder.
+            if [ -z "$SHOT" ]; then
+              echo "::error::a person's seat needs a movement — fill in 'shot', e.g. FACE 6 POWER 60 AIM 13"
+              exit 2
+            fi
+            # `awk NR==1`, not `head -1`: head exits after one line, ls takes a SIGPIPE for it, and under
+            # `set -o pipefail` that made the whole assignment fail — exit 141, no message, a press that
+            # silently did nothing. Measured here on 2026-11-12 while testing this branch.
+            who="${who:-$(ls -1 wake/members | while read -r m; do
+                     grep -qx "$m" lab/fixtures.txt 2>/dev/null || echo "$m"; done | awk 'NR==1')}"
+            if [ -z "$who" ]; then
+              echo "::error::no member on the shelf to play against — name one in 'players'"
+              exit 2
+            fi
+            n="$(printf '%s' "$who" | awk -F, '{print NF}')"
+            if [ "$n" -ne 1 ]; then
+              echo "::error::a person plays one member — name one, got '$who'"; exit 2
+            fi
+            [ -d "wake/members/$who/state" ] || { echo "::error::no such member: $who"; exit 2; }
+            echo "PLAYERS=$PERSON,$who" >> "$GITHUB_ENV"
+            echo "a person's seat: $PERSON against $who"
+            exit 0
+          fi
           if [ -z "$who" ]; then
             # The shelf, minus the test members the bench keeps, in the same order lab/members.py publishes.
+            #
+            # `awk 'NR<=2'` rather than `head -2`, and `[ -f ]` before the grep, and both were measured rather
+            # than reasoned about. `head` exits once it has its lines, the `while` loop then writes into a closed
+            # pipe, `ls` takes the SIGPIPE, `set -o pipefail` turns 141 into a failed assignment, and `set -e`
+            # takes the step down with no message at all. In the bench it usually won the race; in a three-member
+            # colony with no `lab/fixtures.txt` — which is every tribe a stranger makes, because that file is the
+            # bench's own — it lost it every time. Found 2026-11-13 by running the step in a scratch colony.
             who="$(ls -1 wake/members | while read -r m; do
-                     grep -qx "$m" lab/fixtures.txt 2>/dev/null || echo "$m"; done | head -2 | paste -sd, -)"
+                     { [ -f lab/fixtures.txt ] && grep -qx "$m" lab/fixtures.txt; } || echo "$m"
+                   done | awk 'NR<=2' | paste -sd, -)"
             echo "no players named, so the first two on the shelf play: $who"
           fi
           n="$(printf '%s' "$who" | awk -F, '{print NF}')"
@@ -89,13 +132,22 @@ jobs:
           SURFACE: ${{ inputs.surface }}
           RALLIES: ${{ inputs.rallies }}
           TEMPERATURE: ${{ inputs.temperature }}
+          SHOT: ${{ inputs.shot }}
           TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
           TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
           TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
           TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
         run: |
           set -euo pipefail
-          args=(--rally --season "$SEASON" --names "$PLAYERS" --rallies "$RALLIES" --temperature "$TEMPERATURE")
+          if [ -n "$SHOT" ]; then
+            # The person's seat: the movement is typed, so no engine is asked for it, and the only key this
+            # needs is the one belonging to the member across the net.
+            args=(--person-shot "$SHOT" --season "$SEASON" --names "$PLAYERS" --points "$RALLIES"
+                  --temperature "$TEMPERATURE")
+          else
+            args=(--rally --season "$SEASON" --names "$PLAYERS" --rallies "$RALLIES"
+                  --temperature "$TEMPERATURE")
+          fi
           [ "$SURFACE" != "auto" ] && [ -n "$SURFACE" ] && args+=(--surface "$SURFACE")
           true
           # No vendor flag and no practice flag: each member's engine is in its own voice.md, and the count of

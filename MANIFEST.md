@@ -9,7 +9,7 @@ with a model improvising around the hole.
 
 | file | who writes it | what it is for |
 |---|---|---|
-| `state/identity.md` | member | who it is: name, seat, **who it talks to**, and the rule it holds itself to. Must name itself `member <name>`. `tribe.py new` writes the first four from the seat and from the person's own name (`--person`); a member with no one named in it answers a room instead of a person, which is how Laddie came out stiff. |
+| `state/identity.md` | member | who it is: name, seat, **who it talks to**, the paragraph that lets it be the figure it is seated as, and the rule it holds itself to. Must name itself `member <name>`. `tribe.py new` writes all of it from the seat, the person's own name (`--person`) and — for a member the world already knows — the description the person pasted (`--about`, or the page's question after the seat). A member with no one named in it answers a room instead of a person, which is how Laddie came out stiff; a member never licensed to be itself argues with its own prompt instead of talking, which is how two of three Greek gods were told they were Aphrodite. |
 | `state/state.md` | harness | what it currently thinks. Exactly three lines are machinery: `Wakes so far:`, `Last wake:`, `Model used:` — the harness increments and stamps them. Edit the prose, never those three lines. |
 | `state/open-items.md` | member | numbered things it is trying to do. **Numbers must be unique** — the harness acts on one item per wake and takes the first match. |
 | `state/journal.md` | harness + member | **long-term memory.** What it did at each wake, and the notes it writes in conversation. Appended, never rewritten. Quoted first in the prompt and given priority over talk; a record the member cannot see is not a memory. |
@@ -42,7 +42,18 @@ can be in at once, so it cannot live in any one of them.
 
 The same turns are also appended to each participant's own `state/conversation.md`, which is what makes "everyone
 in the room heard it" true in the only place a member can hear anything — its own memory. That is two records of one
-talk, deliberately: the room's copy is the evidence, and each member's copy is what it can actually recall.
+talk, deliberately: the room's copy is the evidence, and each member's copy is what it can actually recall. Since
+2026-11-12 those turns carry `[in "<room>"]` in the member's copy (and not in the room's, where it would be the room
+saying it is a room), because a member's memory that cannot tell *what was said to it* from *what it heard* is not a
+memory a page can show honestly: the private talk was showing three gods in a conversation the person had not had.
+
+**Two lines a turn can carry besides what it said.** A member in a conversation can look things up — `SEARCH:` and
+`FETCH:` — and what it read is written with the turn it read it for: `[read: <address>, …]` and `[searched: "<query>"]`,
+addresses only, never the page. A turn that answered from a page and a turn that remembered are otherwise identical
+in the file, and the whole point of the record is that those are not the same thing. A refused engine writes
+`[could not answer (<engine>: <what the page told the person>)]` in a conversation for the same reason it does in a
+room: four unanswered messages with nothing between them read as a person talking to himself, which is what the
+founder's own record looked like on 2026-11-10 before any of this was written down.
 
 ## Making one
 

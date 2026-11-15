@@ -783,6 +783,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--current", action="store_true",
                     help="the issue currently open: the highest issue on disk, or 1")
+    ap.add_argument("--filed", action="store_true",
+                    help="how many works name this issue — a count, for a caller that must not publish an "
+                         "issue with nothing in it")
     ap.add_argument("--citations", action="store_true",
                     help="files a work cites that are not on the shelf — invented provenance, caught cheaply")
     ap.add_argument("--project", default="", help="one member's works in order — the long view")
@@ -814,6 +817,14 @@ def main(argv: list[str] | None = None) -> int:
             if str(w["issue"]).isdigit():
                 nums.append(int(w["issue"]))
         print(max(nums) if nums else 1)
+        return 0
+
+    if args.filed:
+        # The number only, so a shell can test it without reading prose. `build()` will happily write an
+        # issue that says "No works have been filed under this issue yet" — a true sentence and a published
+        # nothing — and the magazine's own rule is that a piece which was never filed cannot appear in an
+        # issue. A caller that commits must ask this before it builds.
+        print(sum(1 for w in works if str(w["issue"]) == str(args.issue)))
         return 0
 
     if args.plates:

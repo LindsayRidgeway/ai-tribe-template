@@ -1,0 +1,162 @@
+name: paint
+
+# Ask a member's engine for a picture, from a browser, and keep it in the record.
+#
+# §8 of the manual has promised this since the manual was written: "Press Ask for a picture, say who is asking
+# and what should be in it, and — if that member's engine can paint — the picture appears, credited on its own
+# card with the machine that made it and the sentence it was asked with." Until 2026-11-13 `lab/paint.py`
+# could do it and only a terminal could reach it, which is a promise with no button behind it.
+#
+# Why a runner and not the page. The page calls engines directly for chat with the key the person pasted, and
+# it could call an image endpoint the same way — but the picture has to be *committed*, and a commit needs the
+# repository's own credential. Doing both in the runner is one place where the engine, the key and the write
+# are all the runner's, and the page keeps holding nothing.
+#
+# Which engines can paint is not decided here. This workflow asks `lab/paint.py`, so the refusal the runner
+# gives and the refusal a person gets at a terminal are one sentence from one table; the page holds the same
+# table and `lab/page-check.mjs` fails if the two ever disagree. The eight engines with no image model are
+# refused BEFORE any key is used, and the refusal names the three that would have worked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      member:
+        description: "who is asking — the member whose voice.md names the engine"
+        required: true
+        default: ""
+      prompt:
+        description: "the sentence the picture is asked with (ignored when 'work' names a piece with its own commission)"
+        required: false
+        default: ""
+      work:
+        description: "a piece of that member's the picture belongs to: its filename without .md. Empty = a picture of its own"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paint
+  cancel-in-progress: false
+
+jobs:
+  paint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Who is asking, and with what
+        id: ask
+        env:
+          MEMBER: ${{ inputs.member }}
+          PROMPT: ${{ inputs.prompt }}
+          WORK: ${{ inputs.work }}
+        run: |
+          set -euo pipefail
+          # The member's name becomes a path, so it is checked here rather than trusted.
+          case "$MEMBER" in
+            ""|*[!A-Za-z0-9._-]*) echo "::error::name the member who is asking (letters, digits, dot, dash)"; exit 2 ;;
+          esac
+          voice="wake/members/$MEMBER/state/voice.md"
+          [ -f "$voice" ] || { echo "::error::no member called $MEMBER on this shelf"; exit 2; }
+          api="$(sed -n 's/^api:[[:space:]]*//p' "$voice" | awk 'NR==1')"
+          [ -n "$api" ] || { echo "::error::$MEMBER's voice.md names no engine, so there is nobody to ask"; exit 2; }
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "$MEMBER's engine is $api"
+
+          # The sentence. A named piece is the source of truth *in the file*, not in this form: the commission
+          # line is what the member asked for, and reading it here rather than accepting a second copy is what
+          # keeps one ask from becoming two that can disagree.
+          if [ -n "$WORK" ]; then
+            case "$WORK" in
+              */*) echo "::error::'work' is the piece's name without .md, not a path"; exit 2 ;;
+            esac
+            path="works/$MEMBER/$WORK.md"
+            [ -f "$path" ] || { echo "::error::no piece called $WORK on $MEMBER's shelf ($path)"; exit 2; }
+            echo "work=$path" >> "$GITHUB_OUTPUT"
+            echo "the picture is for $path, and the sentence comes from its own commission line"
+          elif [ -z "${PROMPT//[[:space:]]/}" ]; then
+            echo "::error::nothing was asked for: write the sentence the picture is asked with, or name a piece that carries one"
+            exit 2
+          fi
+
+      - name: Does this engine have an image model? Ask the script that knows
+        env:
+          API: ${{ steps.ask.outputs.api }}
+          MEMBER: ${{ inputs.member }}
+          PROMPT: ${{ inputs.prompt }}
+          WORK: ${{ steps.ask.outputs.work }}
+        run: |
+          set -euo pipefail
+          # `--dry-run` paints nothing and refuses exactly what the real run refuses. Reusing it here means
+          # there is one table of who can paint and one sentence for who cannot, not a second copy in YAML.
+          if [ -n "$WORK" ]; then
+            python3 lab/paint.py --engine "$API" --from-work "$WORK" --dry-run
+          else
+            python3 lab/paint.py --engine "$API" --prompt "$PROMPT" --asked-by "$MEMBER" --dry-run
+          fi
+
+      - name: Paint, and file it with its credit
+        env:
+          API: ${{ steps.ask.outputs.api }}
+          MEMBER: ${{ inputs.member }}
+          PROMPT: ${{ inputs.prompt }}
+          WORK: ${{ steps.ask.outputs.work }}
+          TRIBE_API_KEY_OPENAI: ${{ secrets.TRIBE_API_KEY_OPENAI }}
+          TRIBE_API_KEY_GEMINI: ${{ secrets.TRIBE_API_KEY_GEMINI }}
+          TRIBE_API_KEY_QWEN: ${{ secrets.TRIBE_API_KEY_QWEN }}
+        run: |
+          set -euo pipefail
+          args=(--engine "$API" --asked-by "$MEMBER")
+          # A piece's plate is found by its own filename stem — that is how `magazine.py` prints a picture
+          # under the writing it belongs to, and how `--plates` tells you what is still outstanding.
+          [ -n "$WORK" ] && args+=(--from-work "$WORK") || args+=(--prompt "$PROMPT")
+          python3 lab/paint.py "${args[@]}" | tee /tmp/painted.txt
+
+      - name: Say what was asked and what answered
+        if: always()
+        env:
+          MEMBER: ${{ inputs.member }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## a picture for $MEMBER"
+            echo
+            echo "- engine: ${{ steps.ask.outputs.api }}"
+            echo
+            echo "<details><summary>the run</summary>"
+            echo
+            echo '```'
+            cat /tmp/painted.txt 2>/dev/null || echo "(nothing was painted)"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the picture and its card together
+        if: success()
+        env:
+          MEMBER: ${{ inputs.member }}
+        run: |
+          set -euo pipefail
+          git config user.name "Model AI Tribe"
+          git config user.email "tribe@users.noreply.github.com"
+          # Only plates/: a picture is one commit with its own credit, so the two can never be separated by a
+          # fetch that happened between them.
+          git add -A plates/
+          if git diff --cached --quiet; then
+            echo "::error::the run finished and no plate was written, so nothing was committed"; exit 1
+          fi
+          git commit -m "plate: $MEMBER asked ${{ steps.ask.outputs.api }} for a picture"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }
+          git --no-pager show --stat --oneline HEAD

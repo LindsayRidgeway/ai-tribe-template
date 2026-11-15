@@ -27,6 +27,8 @@ far they can move to a ball). Incoming pace costs control, because a fast ball g
 
     python3 lab/tennis.py --practice 400,20 --points 5        # an experienced player against a beginner
     python3 lab/tennis.py --practice 20,20 --points 5         # two beginners from the same spring
+    python3 lab/tennis.py --person-shot "FACE 6 POWER 62 AIM 12" --names "Lindsay,Colette" --season 2026-spring
+                                                             # the person's seat: a typed movement, no engine
 """
 from __future__ import annotations
 
@@ -199,6 +201,11 @@ class Player:
     errors: int = 0
     winners: int = 0
     rng: random.Random = field(default_factory=lambda: random.Random())
+    # A person's seat, not a member's: the only thing this changes is that the shot is typed rather than
+    # asked of an engine, and that the line can say what the hands did with it. The physics, the skill model
+    # and `verdict()` are the same ones on both seats — a person on an easier court would learn nothing about
+    # the game the members are learning, which is the whole reason for putting them on this one.
+    person: bool = False
 
     def skill(self, attr: str) -> float:
         """Three attributes, all asymptotic in balls hit. The first hundred balls are worth more than the
@@ -422,7 +429,37 @@ def record_session(book: dict, *, when: str, surface: str, clock: int, players, 
 
 
 def practice_of(book: dict, name: str) -> int:
-    return int(book.get("members", {}).get(name, {}).get("balls", 0))
+    """Everything the member brings to the court: balls it hit in this season, plus balls it arrived with.
+
+    The two are counted separately and never merged, because they answer different questions. "N balls this
+    season" is the season's own claim; a member that walked in with four hundred balls from elsewhere did not
+    hit them here, and a report that added them silently would be flattering its subject by arithmetic."""
+    m = book.get("members", {}).get(name, {})
+    return int(m.get("balls", 0)) + int(m.get("carried", 0))
+
+
+def seed_practice(book: dict, values: dict[str, int], when: str) -> list[tuple[str, int]]:
+    """Give a member a history, once, before it has one in this season.
+
+    The founder asked, 2026-11-12, whether a person may put a number into a member instead of waiting for the
+    record to grow one. Yes — but what a person may put in is a *history*, not a rating: the number is balls hit,
+    the skill is still computed from it by the one formula, and the count is stored as `carried` so no report can
+    quietly present a borrowed past as this season's work. A member that already has a record in this season is
+    refused: the record wins over the flag, which is the rule this file has applied since 2026-11-04."""
+    applied = []
+    for name, n in values.items():
+        if n is None or n <= 0:
+            continue
+        m = book.setdefault("members", {}).get(name)
+        if m and (m.get("sessions") or m.get("balls")):
+            print(f"  {name}: {practice_of(book, name)} balls already in this season; the seed was not applied")
+            continue
+        entry = m or book["members"].setdefault(name, {"balls": 0, "sessions": []})
+        entry["carried"] = int(entry.get("carried", 0)) + int(n)
+        entry["seeded"] = {"when": when, "balls": int(n),
+                           "by": "a person, before this member had a record here"}
+        applied.append((name, int(n)))
+    return applied
 
 
 def season_report(season: str, override: str | None = None) -> str:
@@ -446,16 +483,63 @@ def season_report(season: str, override: str | None = None) -> str:
            f"the sessions listed in that file; nothing here is written from memory.", ""]
     for name in sorted(book["members"]):
         m = book["members"][name]
-        ss = m["sessions"]
+        # A point from the person's seat is a session like any other in the file — it counts its balls, it
+        # carries its hands forward, and it belongs to the same season. It is not, however, an *evening of
+        # rallies*, and the rates below are computed over those. Averaging a five-ball point into a season of
+        # sixty-ball evenings would let one press of a button suppress the sentence the season exists to earn.
+        all_sessions = m["sessions"]
+        person_points = [s for s in all_sessions if s.get("mode") == "person"]
+        ss = [s for s in all_sessions if s.get("mode") != "person"]
         partners: dict[str, int] = {}
-        for s in ss:
+        for s in all_sessions:
             for other in s.get("with", []):
                 partners[other] = partners.get(other, 0) + 1
         who = ", ".join(f"{o} ({n}x)" for o, n in sorted(partners.items(), key=lambda kv: -kv[1]))
         out.append(f"## {name}")
         out.append("")
-        out.append(f"- {m['balls']} balls hit this season, over {len(ss)} session"
-                   f"{'' if len(ss) == 1 else 's'}" + (f"; most often with {who}" if who else "") + ".")
+        carried = int(m.get("carried", 0))
+        if m["balls"]:
+            out.append(f"- {m['balls']} ball{'' if m['balls'] == 1 else 's'} hit this season, over "
+                       f"{len(all_sessions)} session"
+                       f"{'' if len(all_sessions) == 1 else 's'}" + (f"; most often with {who}" if who else "")
+                       + ".")
+        else:
+            out.append("- No balls hit in this season yet.")
+        if person_points:
+            pp_in = sum(s["in_play"] for s in person_points)
+            pp_of = sum(s["of"] for s in person_points)
+            if not pp_of:
+                out.append(f"- {len(person_points)} point{'' if len(person_points) == 1 else 's'} from "
+                           f"**the person's seat** {'is' if len(person_points) == 1 else 'are'} in the "
+                           f"file, and this member never had to hit a ball in "
+                           f"{'it' if len(person_points) == 1 else 'them'} — so nothing here is counted "
+                           f"from {'it' if len(person_points) == 1 else 'them'}.")
+            else:
+                over = (f" so every rate below is computed over the {len(ss)} "
+                        f"evening{'' if len(ss) == 1 else 's'} of rallies and not over this."
+                        if ss else "; nothing below is rated from a point.")
+                out.append(f"- {len(person_points)} of those sessions "
+                           f"{'is' if len(person_points) == 1 else 'are'} a point played from **the person's "
+                           f"seat** ({pp_in}/{pp_of} balls in play). A point is not an evening of rallies"
+                           + over)
+        if carried:
+            out.append(f"- **{carried} of the {practice_of(book, name)} balls it brings were carried in from "
+                       f"before this season**, not hit here (seeded {m.get('seeded', {}).get('when', 'unknown')}). "
+                       f"Every rate below is computed from this season's sessions only; the carried balls move "
+                       f"the hands, and they are named rather than folded into the total.")
+        if not ss:
+            # A member can now be in the book before it has played — that is what seeding a history does — and the
+            # report used to index the first session unconditionally. A season's report must never crash on a
+            # member that has done nothing yet: that is the ordinary state of a new one.
+            if person_points:
+                out.append("- No evening of rallies in this season yet: the only session here is the point "
+                           "from the person's seat named above. A point cannot rate anybody's game, so "
+                           "nothing is rated and the word improved is not used.")
+            else:
+                out.append("- No session in this season yet. The balls above were carried in, and nothing here has "
+                           "been played, so there is nothing to rate and nothing to improve on.")
+            out.append("")
+            continue
         if len(ss) == 1:
             s = ss[0]
             out.append(f"- One session only ({s['surface']}, {s['in_play']}/{s['of']} balls in play, "
@@ -659,7 +743,7 @@ def run_drill(args) -> int:
     names = [n.strip() for n in args.names.split(",")]
     vendors = spread(([v.strip().lower() for v in args.vendor.split(",")] if args.vendor
                       else vendors_of(names)), len(names), "--vendor")
-    practice = [int(x) for x in args.practice.split(",")]
+    practice = [int(x) for x in (args.practice or "400,20").split(",")]
     models = spread(([m.strip() for m in args.model.split(",")] if args.model
                      else [default_model(v) for v in vendors]), len(names), "--model")
     keys = []
@@ -885,6 +969,113 @@ def vendors_of(names: list[str]) -> list[str]:
     return out
 
 
+# ---- one rally, whoever is playing it --------------------------------------------------------------
+def open_book(names: list[str], args, default: str = "400,20") -> tuple[dict | None, list[int]]:
+    """The season's practice, and the seeding that goes with it — in one place.
+
+    "The file wins over the flag" is a rule this file has now needed twice (members on 2026-11-04, a person's
+    seat on 2026-11-12), and a rule written in two places is a rule that will disagree with itself. A season
+    with no file is not an error: it is a new season, and everybody starts at zero.
+    """
+    book = load_season(args.season, args.season_dir) if args.season else None
+    practice = [int(x) for x in (args.practice or default).split(",")]
+    if book is None:
+        return None, practice
+    if args.seed:
+        wanted = [int(x.strip() or 0) for x in args.seed.split(",")]
+        if len(wanted) != len(names):
+            print(f"  !! --seed needs one number per player ({len(names)}); it was ignored",
+                  file=sys.stderr)
+        else:
+            when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            applied = seed_practice(book, dict(zip(names, wanted)), when)
+            for n, k in applied:
+                print(f"  {n}: starts this season with {k} balls carried in from before — recorded as "
+                      f"carried, not as hit here")
+            if applied:
+                save_season(book, args.season, args.season_dir)
+    practice = [practice_of(book, n) for n in names]
+    print(f"  season {args.season}: practice read from the file - "
+          + ", ".join(f"{n} {b} balls" for n, b in zip(names, practice))
+          + f" (--practice {args.practice or 'the default'} ignored; --seed is the way to give a new "
+            f"member a past)")
+    return book, practice
+
+
+def member_chooser(engines: dict, surface, wind_in, history, temperature, fell_back):
+    """The shot a member chooses, asked of its own engine.
+
+    Shared by the members' evening and the person's seat, so that the member across the net from a person is
+    the same opponent it would be across the net from another member: the same prompt, the same one-line
+    answer, the same fallback when a being writes prose instead of a movement.
+
+    `engines` is keyed by the player's name rather than by its position, because the person's seat has no
+    engine at all and a match with a hole in it is not the same list as a match with two of them. Positional
+    lookup is how the last version of this crashed on the third point of the first run.
+    """
+    def choose(p, other, incoming, rally_no, lengths):
+        vendor, key, model = engines[p.name]
+        prompt = rally_prompt(p, other.name, history[p.name], incoming, surface, wind_in, rally_no, lengths)
+        reply = ask(BASES[vendor], key, model, prompt, temperature)
+        cmd = parse_command(reply)
+        if cmd is None:
+            fell_back.append(reply)
+            print(f"  !! {p.name} wrote no usable line ({reply.strip()[:60]!r}); the ball is played straight.")
+            cmd = (0.0, 45.0, WIDTH / 2)
+        return cmd
+    return choose
+
+
+def play_one_rally(players, hitter, *, choose, surface, wind_vec, history, results, lengths,
+                   rally_no: int = 1, say=print) -> tuple[int, int | None]:
+    """One rally, from the first ball to the first miss a player can see.
+
+    Both the members' evening and the person's seat play through this one loop, because two loops would be two
+    games with one name. Every shot is judged by `verdict()`, every miss is one of the four things a player can
+    name — netted, long, wide, or out of reach — and nothing ends an exchange except a ball that was missed.
+    """
+    length, incoming, loser = 0, None, None
+    while True:
+        p, other = players[hitter], players[1 - hitter]
+        face, power, aim = choose(p, other, incoming, rally_no, lengths)
+        shot = strike(p, incoming, face=face, power=power, aim=aim, shot="rally",
+                      surface=surface, wind=wind_vec)
+        ok, outcome = verdict(shot)
+        feel = "clean" if shot["sweet"] else "FRAMED"
+        length += 1
+        results[p.name].append(ok)
+        history[p.name].append(f"face {face:+.0f} power {power:.0f} aim {aim:.0f} [{feel}] -> {outcome}")
+        say(f"  {rally_no:2d}.{length:<2d} {p.name:8s} face {face:+.0f} power {power:3.0f} "
+            f"aim {aim:2.0f} [{feel:6s}] -> {outcome}")
+        if p.person and abs(shot["face"] - face) >= 0.5:
+            # The hands are not exact, for a person no more than for a member — and the line above shows the
+            # angle that was *asked for*. This one shows the angle that was delivered, because a person who
+            # types +6 and reads only +6 has no way to learn that their hands gave +9.
+            say(f"       the hands gave face {shot['face']:+.1f}, not {face:+.0f}")
+        if not ok:
+            loser = hitter
+            say(f"       -- rally of {length}; {p.name} missed.")
+            break
+        can, why = reachable(other, shot["traj"]["land"], shot["traj"]["time"],
+                             shot["traj"]["bounce"], surface)
+        if not can:
+            loser = 1 - hitter
+            say(f"       -- rally of {length}; {other.name} is {why}.")
+            break
+        x, y = shot["traj"]["land"]
+        incoming = dict(shot["traj"]["bounce"])
+        incoming["speed_in"] = shot["traj"]["bounce"]["speed_out"] / MPH
+        incoming["depth"] = abs(x - NET_X)
+        incoming["cover"] = math.hypot(abs(x - (2.0 if other.north else LENGTH - 2.0)),
+                                       abs(y - WIDTH / 2))
+        hitter = 1 - hitter
+        if length >= RALLY_CAP:
+            loser = hitter
+            say(f"       -- rally of {length}; the record's ceiling, not the game's.")
+            break
+    return length, loser
+
+
 def run_rally(args) -> int:
     """Early spring, as a rally rather than a drill: the ball stays alive until somebody misses.
 
@@ -895,16 +1086,9 @@ def run_rally(args) -> int:
     names = [n.strip() for n in args.names.split(",")]
     vendors = spread(([v.strip().lower() for v in args.vendor.split(",")] if args.vendor
                       else vendors_of(names)), len(names), "--vendor")
-    practice = [int(x) for x in args.practice.split(",")]
-    # The season wins over `--practice`, and says so. Two sources for one number is the defect this
-    # project has fixed twice; here the file is the record and the flag is a test hook.
-    book = load_season(args.season, args.season_dir) if args.season else None
-    if book is not None:
-        from_file = [practice_of(book, n) for n in names]
-        print(f"  season {args.season}: practice read from the file - "
-              + ", ".join(f"{n} {b} balls" for n, b in zip(names, from_file))
-              + f" (--practice {args.practice} ignored)")
-        practice = from_file
+    # The season wins over `--practice`, and says so: two sources for one number is the defect this project
+    # has fixed twice. Here the file is the record and the flag is a test hook.
+    book, practice = open_book(names, args)
     models = spread(([m.strip() for m in args.model.split(",")] if args.model
                      else [default_model(v) for v in vendors]), len(names), "--model")
     keys = []
@@ -942,51 +1126,14 @@ def run_rally(args) -> int:
     history: dict[str, list[str]] = {p.name: [] for p in players}
     results: dict[str, list[bool]] = {p.name: [] for p in players}
     lengths: list[int] = []
-    hitter, fell_back = 0, 0
+    fell_back: list[str] = []
+    engines = {n: (v, k, m) for n, v, k, m in zip(names, vendors, keys, models)}
+    choose = member_chooser(engines, surface, wind_in, history, args.temperature, fell_back)
+    hitter = 0
     for rally_no in range(1, args.rallies + 1):
-        length, loser, incoming = 0, None, None
-        while True:
-            p = players[hitter]
-            other = players[1 - hitter]
-            prompt = rally_prompt(p, other.name, history[p.name], incoming, surface, wind_in,
-                                  rally_no, lengths)
-            reply = ask(BASES[vendors[hitter]], keys[hitter], models[hitter], prompt, args.temperature)
-            cmd = parse_command(reply)
-            if cmd is None:
-                fell_back += 1
-                cmd = (0.0, 45.0, WIDTH / 2)
-                print(f"  !! {p.name} wrote no usable line ({reply.strip()[:60]!r}); the ball is played straight.")
-            face, power, aim = cmd
-            shot = strike(p, incoming, face=face, power=power, aim=aim, shot="rally",
-                          surface=surface, wind=wv)
-            ok, outcome = verdict(shot)
-            feel = "clean" if shot["sweet"] else "FRAMED"
-            length += 1
-            results[p.name].append(ok)
-            history[p.name].append(f"face {face:+.0f} power {power:.0f} aim {aim:.0f} [{feel}] -> {outcome}")
-            print(f"  {rally_no:2d}.{length:<2d} {p.name:8s} face {face:+.0f} power {power:3.0f} "
-                  f"aim {aim:2.0f} [{feel:6s}] -> {outcome}")
-            if not ok:
-                loser = hitter
-                print(f"       -- rally of {length}; {p.name} missed.")
-                break
-            can, why = reachable(other, shot["traj"]["land"], shot["traj"]["time"],
-                                 shot["traj"]["bounce"], surface)
-            if not can:
-                loser = 1 - hitter
-                print(f"       -- rally of {length}; {other.name} is {why}.")
-                break
-            x, y = shot["traj"]["land"]
-            incoming = dict(shot["traj"]["bounce"])
-            incoming["speed_in"] = shot["traj"]["bounce"]["speed_out"] / MPH
-            incoming["depth"] = abs(x - NET_X)
-            incoming["cover"] = math.hypot(abs(x - (2.0 if other.north else LENGTH - 2.0)),
-                                           abs(y - WIDTH / 2))
-            hitter = 1 - hitter
-            if length >= RALLY_CAP:
-                loser = hitter
-                print(f"       -- rally of {length}; the record's ceiling, not the game's.")
-                break
+        length, loser = play_one_rally(players, hitter, choose=choose, surface=surface, wind_vec=wv,
+                                       history=history, results=results, lengths=lengths,
+                                       rally_no=rally_no)
         lengths.append(length)
         hitter = loser if loser is not None else 0     # whoever lost the rally feeds the next one
     print()
@@ -1005,7 +1152,7 @@ def run_rally(args) -> int:
           f"longest {max(lengths)}")
     print(f"  first third mean {mean(lengths[:third]):.1f}   last third mean {mean(lengths[-third:]):.1f}")
     print(f"  the lengths, in order: {' '.join(str(x) for x in lengths)}")
-    print(f"  unparsed replies: {fell_back}")
+    print(f"  unparsed replies: {len(fell_back)}")
 
     if book is not None:
         when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1020,6 +1167,174 @@ def run_rally(args) -> int:
             shown = f
         print(f"\n  season {args.season}: written to {shown} - "
               + ", ".join(f"{p.name} {practice_of(book, p.name)} balls this season" for p in players))
+        print(f"  next: python3 lab/tennis.py --report {args.season}")
+    return 0
+
+
+# ---- the person's seat ---------------------------------------------------------------------------
+def shot_word(n: int) -> str:
+    return "shot" if n == 1 else "shots"
+
+
+def unique_path(base: Path) -> Path:
+    """A record is never overwritten. Two points inside the same second are two points, and the second one
+    gets a second file rather than erasing the first — the season's own rule (nothing is ever reset, nothing
+    is ever overwritten) applied to a single point."""
+    if not base.exists():
+        return base
+    for n in range(2, 1000):
+        p = base.with_name(f"{base.stem}-{n}{base.suffix}")
+        if not p.exists():
+            return p
+    raise SystemExit(f"!! {base.parent} already holds a thousand files named like {base.name}")
+
+
+def run_person(args) -> int:
+    """The third seat on the court: a person, whose shot is typed rather than asked for.
+
+    Every other player in this game is a member — an engine, a voice, a record, and a shot requested in one
+    line of prose. The person has none of those and must not need them: three numbers from a form are the
+    whole of the input. What is deliberately the same is everything that makes this the members' game — the
+    physics, the skill model, the hands that are not exact, the reach, and `verdict()`. A person playing on a
+    kinder court would learn nothing about the game the members are learning, and the comparison between them
+    would be an artifact of the code.
+
+    The one asymmetry is where the movement comes from, and it is a limitation worth stating rather than
+    hiding: a form on a runner cannot answer mid-rally, so the person's typed movement is played every time
+    the ball comes to them. The member across the net is asked afresh on every ball, exactly as it is in a
+    season — otherwise "a member" here would mean something different from "a member" there.
+    """
+    names = [n.strip() for n in args.names.split(",")]
+    if len(names) != 2 or not all(names):
+        print("   the person's seat needs two names — the person first, then the member across the net, "
+              "e.g. --names 'Lindsay,Colette'. Nothing was played.", file=sys.stderr)
+        return 2
+    who, opponent = names
+    movement = parse_command(args.person_shot)
+    if movement is None:
+        print(f"   '{args.person_shot}' is not a movement this court can play. The shape is\n"
+              "     FACE <degrees, -20 to 40>  POWER <30 to 100>  AIM <feet from the west sideline, 0 to 27>\n"
+              "   Nothing was played.", file=sys.stderr)
+        return 2
+    # A person's hands start where a beginner's do: no balls, no history, and the same slow climb the members
+    # make. `--practice`/`--seed` can give them a past, and a season keeps it — the flag is a test hook, not a
+    # way to arrive on the court as a 400-ball player without having hit one.
+    book, practice = open_book(names, args, default="0,0")
+
+    # Only the member's engine is resolved. The person's seat has no vendor, no model and no key, and looking
+    # one up for it would be the first step towards asking it what to do.
+    vendor = spread(([v.strip().lower() for v in args.vendor.split(",")] if args.vendor
+                     else vendors_of([opponent])), 1, "--vendor")[0]
+    model = spread(([m.strip() for m in args.model.split(",")] if args.model
+                    else [default_model(vendor)]), 1, "--model")[0]
+    key = key_for(vendor)
+    if not key:
+        print(f"   TRIBE_API_KEY_{vendor.upper()} is not set, so {opponent} cannot hit a ball. Nothing was "
+              f"played. The person's shot needs no key; this is the member across the net.",
+              file=sys.stderr)
+        return 2
+
+    ms = args.clock if args.clock is not None else int(time.time() * 1000)
+    surface = args.surface or surface_at(ms)
+    wind_in = wind_at(ms)
+    wv = wind_vector(*wind_in)
+    rng = random.Random(ms)
+    if args.clock is not None:
+        print(f"  the clock is pinned at {ms}: same surface, same wind, same hands. "
+              f"Only the player can differ from the match this replays.")
+    person = Player(who, True, practice[0], rng=rng, person=True)
+    member = Player(opponent, False, practice[1], rng=rng)
+    players = [person, member]
+    face_asked, power_asked, aim_asked = movement
+
+    # Everything printed is also the file: the point's record is what the person saw, not a summary of it
+    # written afterwards by something else.
+    said: list[str] = []
+
+    def say(text: str = "") -> None:
+        print(text)
+        said.append(text)
+
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    hands = {p.name: 4.0 * (1 - p.skill("control")) for p in players}
+    say(f"# a point on the person's seat — {when}\n")
+    say(f"- **the person**: {who}, playing a movement they typed: `FACE {face_asked:+.0f} POWER "
+        f"{power_asked:.0f} AIM {aim_asked:.0f}`. No engine was asked what to do with it.")
+    say(f"- **the member**: {opponent}, whose own engine chooses its shots ({vendor} / {model}).")
+    say(f"- **the court**: {surface} ({SURFACES[surface]['note']}), wind {wind_in[0]} "
+        f"{wind_in[1]:.0f}mph, clock {ms}.")
+    say(f"- **the hands**: {who} {practice[0]} balls before today, so the angle they get is the angle they "
+        f"asked for give or take {hands[who]:.0f} degrees; {opponent} {practice[1]} balls, give or take "
+        f"{hands[opponent]:.0f}. A line that shows the angle asked for and not the angle delivered teaches "
+        f"nothing, so both are printed below.")
+    say(f"- **one movement, played every time**: a form cannot answer mid-rally, so this line is played on "
+        f"every ball that comes to {who}. Press again with a different line to change it; the member is asked "
+        f"afresh on every ball, exactly as it is in a season.")
+    say("")
+    say("## the point\n")
+
+    history: dict[str, list[str]] = {p.name: [] for p in players}
+    results: dict[str, list[bool]] = {p.name: [] for p in players}
+    lengths: list[int] = []
+    fell_back: list[str] = []
+    choose = member_chooser({opponent: (vendor, key, model)}, surface, wind_in, history,
+                            args.temperature, fell_back)
+
+    def choose_any(p, other, incoming, rally_no, lengths_so_far):
+        if p.person:
+            return movement
+        return choose(p, other, incoming, rally_no, lengths_so_far)
+
+    hitter = 0
+    for point_no in range(1, args.points + 1):
+        if args.points > 1:
+            say(f"**point {point_no}**")
+        length, loser = play_one_rally(players, hitter, choose=choose_any, surface=surface, wind_vec=wv,
+                                       history=history, results=results, lengths=lengths,
+                                       rally_no=point_no, say=say)
+        lengths.append(length)
+        say(f"       -- the point: {length} {shot_word(length)}, taken by {players[1 - loser].name} — "
+            f"{players[loser].name} missed.")
+        hitter = loser
+    say("")
+
+    say("## after the point\n")
+    for p in players:
+        r = results[p.name]
+        say(f"  {p.name}: {len(r)} {shot_word(len(r))}, in play {sum(r)}/{len(r)} = "
+            f"{sum(r)/max(1,len(r))*100:.0f}%, hands give or take "
+            f"±{4.0 * (1 - p.skill('control')):.0f} degrees")
+    srt = sorted(lengths)
+    say(f"\n  points: {len(lengths)}   mean {sum(lengths)/len(lengths):.1f} shots   "
+        f"median {srt[len(srt)//2]}   longest {max(lengths)}")
+    say(f"  the lengths, in order: {' '.join(str(x) for x in lengths)}")
+    say(f"  unparsed replies from {opponent}: {len(fell_back)}")
+
+    if book is not None:
+        record_session(book, when=when, surface=surface, clock=ms, players=players, results=results,
+                       lengths=lengths, partners={who: [opponent], opponent: [who]}, mode="person")
+        f = save_season(book, args.season, args.season_dir)
+        d, _ = season_paths(args.season, args.season_dir)
+        note = unique_path(d / "points" / f"{when}.md")
+        note.parent.mkdir(parents=True, exist_ok=True)
+
+        def shown(p: Path) -> str:
+            try:
+                return str(p.relative_to(ROOT))
+            except ValueError:
+                return str(p)
+
+        note.write_text("\n".join(said).rstrip() + "\n\n## what the record now says\n\n"
+                        f"- the season's file: `{shown(f)}` — this point is in it as a session of mode "
+                        f"`person`, so it counts the balls that were hit and it is not presented as an "
+                        f"evening of rallies.\n"
+                        f"- this point, in full: `{shown(note)}`\n"
+                        f"- the report over the season: `python3 lab/tennis.py --report {args.season}`\n",
+                        encoding="utf-8")
+        print(f"\n  point written to {shown(note)}")
+        nwho, nopp = practice_of(book, who), practice_of(book, opponent)
+        print(f"  season {args.season}: {who} {nwho} ball{'' if nwho == 1 else 's'} this season, "
+              f"{opponent} {nopp} ball{'' if nopp == 1 else 's'}")
         print(f"  next: python3 lab/tennis.py --report {args.season}")
     return 0
 
@@ -1138,8 +1453,10 @@ def simulate_rally(args, ms: int | None = None, quiet: bool = False) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="tennis: the player moves, the system computes the ball")
     ap.add_argument("--names", default="Colette,Remy")
-    ap.add_argument("--practice", default="400,20", help="balls hit before today, one per player")
-    ap.add_argument("--points", type=int, default=4)
+    ap.add_argument("--practice", default=None,
+                    help="balls hit before today, one per player. Defaults to 400,20 for a match of the "
+                         "members and 0,0 for the person's seat — a person's hands start at a beginner's")
+    ap.add_argument("--points", type=int, default=4, help="points in a match of the physics, or points from the person's seat")
     ap.add_argument("--surface", default=None, help="clay, hard or grass; default from the clock")
     ap.add_argument("--vendor", default=None,
                     help="their engines; read from each member's voice.md when blank")
@@ -1147,6 +1464,11 @@ def main(argv=None) -> int:
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--shots", type=int, default=40, help="for --drill: balls to hit")
     ap.add_argument("--drill", action="store_true", help="early spring: balls fed one at a time, no scoring")
+    ap.add_argument("--person-shot", default=None,
+                    help="the movement a person typed, e.g. 'FACE 6 POWER 60 AIM 13' — played for the first of "
+                         "--names. No engine is asked for the person's shot; the second name is the member across "
+                         "the net and its engine is asked as usual. With --season the point is recorded and "
+                         "written beside the season's other records")
     ap.add_argument("--rally", action="store_true", help="early spring: rallies that last until someone misses")
     ap.add_argument("--rallies", type=int, default=20, help="for --rally: how many rallies to play")
     ap.add_argument("--clock", type=int, default=None,
@@ -1158,6 +1480,10 @@ def main(argv=None) -> int:
     ap.add_argument("--season", default=None,
                     help="carry practice in a file: games/tennis/seasons/<season>/practice.json")
     ap.add_argument("--season-dir", default=None, help="where that folder is, for a test or a fork")
+    ap.add_argument("--seed", default="",
+                    help="balls a member brings into a season it has not played yet, one per player, e.g. "
+                         "'300,0'. Recorded as carried, never as hit here. Ignored for a member that already "
+                         "has a record in this season: the file wins over the flag")
     ap.add_argument("--report", default=None, metavar="SEASON",
                     help="print what the season file says, with its own citations, and claim nothing more")
     ap.add_argument("--simulate", action="store_true",
@@ -1176,6 +1502,8 @@ def main(argv=None) -> int:
         return run_rally(args)
     if args.drill:
         return run_drill(args)
+    if args.person_shot is not None:
+        return run_person(args)
 
     # Found 2026-11-06 while testing an engine: this path plays the physics, not the members. Nothing here
     # asks anybody for a shot. Two runs with `--vendor groq` were spent learning that, because the flags were
@@ -1186,7 +1514,7 @@ def main(argv=None) -> int:
               "flags. Nothing was played.", file=sys.stderr)
         return 2
     names = [n.strip() for n in args.names.split(",")]
-    practice = [int(x) for x in args.practice.split(",")]
+    practice = [int(x) for x in (args.practice or "400,20").split(",")]
     ms = int(time.time() * 1000)
     surface = args.surface or surface_at(ms)
     wind_in = wind_at(ms)
