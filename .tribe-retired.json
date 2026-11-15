@@ -1,0 +1,4 @@
+{
+  "about": "Files this project has stopped shipping. `lab/update_tribe.py` names every entry that is still on an owner's disk and deletes it only when the owner passes --prune. A retired file is a decision with a reason and a date, never a side effect of an update. Nothing has been retired yet.",
+  "files": []
+}

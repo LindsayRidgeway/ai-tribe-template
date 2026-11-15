@@ -50,6 +50,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = "LindsayRidgeway/ai-tribe-template"
 BRANCH = "main"
 TARBALL = f"https://codeload.github.com/{TEMPLATE}/tar.gz/refs/heads/{BRANCH}"
+RETIRED_NAME = ".tribe-retired.json"
 
 # Machinery: files the project owns and keeps current. A path is replaceable if it starts with one of
 # these prefixes and is not in CONTENT below. Root-level `.py`, `.sh` and the three documents are added
@@ -76,24 +77,36 @@ def is_machinery(rel: str) -> bool:
     return "/" not in rel and rel.endswith((".py", ".sh"))
 
 
-def fetch_template() -> dict[str, bytes]:
-    """The published template, as {relative path: bytes}. No token: the repository is public."""
+def fetch_template() -> tuple[dict[str, bytes], list[dict]]:
+    """The published template as {relative path: bytes}, and the list of files it has retired.
+
+    No token: the repository is public. `.tribe-retired.json` travels with the template but is not one of
+    the files a tribe receives — it is the project's record of what it stopped shipping, and the only
+    authority the updater has for ever deleting anything.
+    """
     out: dict[str, bytes] = {}
+    retired: list[dict] = []
     with tempfile.TemporaryDirectory() as tmp:
         tgz = Path(tmp) / "tpl.tgz"
         try:
             urllib.request.urlretrieve(TARBALL, tgz)
         except Exception as e:                                    # noqa: BLE001 - reported, not raised
             print(f"!! could not download the template: {e}", file=sys.stderr)
-            return {}
+            return {}, []
         with tarfile.open(tgz) as tf:
             for m in tf.getmembers():
                 if not m.isfile():
                     continue
                 rel = re.sub(r"^[^/]+/", "", m.name)
+                if rel == RETIRED_NAME:
+                    try:
+                        retired = json.loads(tf.extractfile(m).read().decode("utf-8")).get("files", [])
+                    except Exception as e:                        # noqa: BLE001 - a broken list is reported
+                        print(f"!! {RETIRED_NAME} is not readable: {e}", file=sys.stderr)
+                    continue
                 if rel and is_machinery(rel):
                     out[rel] = tf.extractfile(m).read()
-    return out
+    return out, retired
 
 
 def digest(data: bytes) -> str:
@@ -174,6 +187,8 @@ def main() -> int:
     ap.add_argument("--commit", action="store_true", help="commit what was copied")
     ap.add_argument("--push", action="store_true", help="push the commit")
     ap.add_argument("--no-regenerate", action="store_true", help="do not rebuild members.json")
+    ap.add_argument("--prune", action="store_true",
+                    help="delete files the template lists as retired (default: only name them)")
     a = ap.parse_args()
 
     root = Path(a.root).resolve()
@@ -181,10 +196,13 @@ def main() -> int:
         print(f"!! {root} does not look like a tribe: no tribe.py. Refusing to touch it.", file=sys.stderr)
         return 1
 
-    template = fetch_template()
+    template, retired = fetch_template()
     if not template:
         return 2
     changed, added, kept = plan(template, root)
+    # A retired file is named, never removed on the same press that copies. `--prune` is the only thing
+    # that deletes, and it deletes only paths the project itself retired — never a file the owner wrote.
+    gone = [r for r in retired if (root / r["path"]).exists() and r["path"] not in template]
 
     print(f"template {TEMPLATE}@{BRANCH}: {len(template)} machinery file(s)")
     for rel in added:
@@ -193,7 +211,11 @@ def main() -> int:
         print(f"  ~ {rel}  {digest((root / rel).read_bytes())} -> {digest(template[rel])}")
     for rel in kept:
         print(f"  = {rel}  kept (the owner's, or derived)")
-    if not (changed or added):
+    for r in gone:
+        print(f"  - {r['path']}  retired {r.get('since', '?')}: {r.get('why', 'no reason recorded')}")
+        if not a.prune:
+            print(f"      kept — pass --prune to remove it (it is on disk until you decide)")
+    if not (changed or added or (gone and a.prune)):
         print("nothing to do: this tribe already has the current machinery")
         return 0
     if not a.write:
@@ -202,6 +224,10 @@ def main() -> int:
 
     apply(template, root, changed, added)
     print(f"copied {len(changed) + len(added)} file(s)")
+    if a.prune and gone:
+        for r in gone:
+            subprocess.run(["git", "rm", "-q", "--", r["path"]], cwd=root, check=False)
+            print(f"removed {r['path']} (retired {r.get('since', '?')})")
     if not a.no_regenerate:
         print(f"members.json: {regenerate_members(root)}")
 

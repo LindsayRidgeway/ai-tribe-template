@@ -354,7 +354,7 @@ def aim_at(p: Player, target, shot: str, surface: str, wind, power: float) -> tu
 # What a player can reach without moving, and how high. The racquet is 27in and a swung arm puts the middle of
 # the strings about 3ft from the hips, which is the number the interception measures from; the high one is
 # where an overhead stops being an overhead and a ball stops being returnable at all.
-RACQUET_REACH = 7.0
+RACQUET_REACH = 6.0
 RACQUET_HIGH = 9.0
 STEP = 0.02                           # s; the slice the ball's plan is stepped in, and why a miss is measured in tenths
 # Two costs that are not distance and that the first version of this rule ignored entirely. A player does not
@@ -362,16 +362,14 @@ STEP = 0.02                           # s; the slice the ball's plan is stepped 
 # And a ball met at a full sprint is a frame, not a shot — the feet have to plant before the swing, which is the
 # 'brake' the movement list already owed. Both are charged here, in seconds, against the time available.
 #
-# The seven feet is a standing lunge, not a dive: three feet of arm and racquet, plus the first step you take as
-# you reach. It is deliberately at the generous end of plausible because this model gives the player no
-# anticipation at all — the real player knows roughly where the ball is going from the swing before it leaves the
-# strings, and that knowledge is worth more than a foot of arm — and because the step is charged for twice: once
-# here as distance and once above as REACTION. Calibrated 2026-11-15 against 600 balls the engine itself struck
-# (`/tmp/pop10.py`, 600 fixed balls, every skill level asked about the same ones): with these three numbers a
-# player who has hit nothing reaches 74% of them and one with six hundred balls reaches 95%; the old shortcut
-# reached 100% of every one of them at every skill level, which is the defect. In 150-point matches the member at
-# 300 and at 600 balls is beaten on 18-28% of the balls they have to get to. With a three-foot radius those
-# matches were 56% and nobody could play; that is what the guard in the backlog is for.
+# The six feet is a standing lunge, not a dive: three feet of arm and racquet plus the step you take *as* you
+# reach. It is deliberately at the generous end of plausible because this model gives the player no anticipation
+# at all — the real player knows roughly where the ball is going from the swing before it leaves the strings, and
+# that knowledge is worth more than a foot of arm. Calibrated 2026-11-15 against 600 balls the engine itself
+# struck: at these three numbers a beginner reaches 74% of them and a member with six hundred balls reaches 93%,
+# and in 150-point matches the member at 300 and at 600 balls is beaten on 18-28% of the balls they have to get
+# to. That is the band this was built for; with a three-foot radius the same matches were 56% and nobody could
+# play, and with the old shortcut they were zero.
 REACTION = 0.25
 SETTLE = 0.20
 
