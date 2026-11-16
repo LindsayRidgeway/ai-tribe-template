@@ -774,6 +774,12 @@ alone because you changed it"* — and writes nothing. The second writes. They t
 obey the same rule, because they read the template's own published list of what an update may write; and a file you
 edited is left alone and named, not overwritten. If nothing is out of date, the buttons do not appear at all.
 
+**If the page's update is interrupted, it does not pretend it finished.** GitHub sometimes refuses a file because it
+changed between the moment the page read it and the moment it wrote it — the usual cause is a wake committing in the
+same few seconds. The files that were written stay written, the one that changed is left alone, and the tribe's record
+of which version it runs is deliberately *not* advanced: the buttons offer the update again on the next load and write
+whatever is still behind. Pressing twice is the whole cost, and nothing is lost in between.
+
 **A file the project has retired is listed, never deleted.** If the template stops shipping something, the update
 prints it as retired, with the reason and the date, and leaves it on disk. Deleting it is a decision, made by you,
 by passing `--prune` — and the same validation gate applies to the result. A copier that deletes things quietly is
