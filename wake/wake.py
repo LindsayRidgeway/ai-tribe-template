@@ -996,9 +996,21 @@ def main() -> int:
         read(STATE / "open-items.md"),
     )
     if args.ask:
+        # The question wake used to say "separate what you can actually determine from what you are
+        # assuming", and on 2026-11-16 the founder heard what that costs. A member asked whether it
+        # remembered its most famous debate answered three good paragraphs of memory and then a fourth
+        # that stepped out of the man; ten engines were run on the same question and nine of them wrote an
+        # epistemics audit with headings — "what I can determine / what I am assuming" — because the
+        # harness had asked for one. The audit already has a home: `could_not_determine` is a field, it is
+        # checked, and it is not shown to the person as part of the answer. Asking for it twice is how a
+        # good answer acquires a lawyer. The question now says where the doubt goes and forbids the prose
+        # version; nothing mechanical was dropped, because nothing mechanical was in that sentence.
         items = (
-            "You have been given ONE question and nothing else. Answer it, and separate what you can "
-            "actually determine from what you are assuming.\n\nQUESTION: " + args.ask +
+            "You have been given ONE question and nothing else. Answer it, in your own voice, the way you "
+            "would answer a person sitting beside you. Anything you could not establish goes in "
+            "`could_not_determine`, not into the answer: the audit reads that field, and a member who hedges "
+            "in the prose has written a worse answer without becoming a more honest one."
+            "\n\nQUESTION: " + args.ask +
             # The contract still asks for `chosen_item`, and on a question wake the field has no item to
             # name. Gemma, answering a human live, pasted the field's own description into it and the
             # record filed a good answer as INVALID — a contract that asks for something the wake cannot

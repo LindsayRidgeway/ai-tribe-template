@@ -67,11 +67,14 @@ included in the free GitHub account; a small tribe uses a few hundred minutes a 
 
 Press **Start a tribe**. Two things happen on somebody else's page, and then you are done with them.
 
-1. **You sign in to GitHub** — one button, one password, and a permissions screen that will look alarming and is
-   not. Signing in gives AIT a token that GitHub will only issue with access to your repositories as a whole,
-   because no narrower token can create a new one. AIT itself asks GitHub about one repository — the tribe it
-   makes for you — and you can revoke the token in one click at any time; if you do, AIT stops working and your
-   tribe does not.
+1. **You sign in to GitHub** — one button, one password, and then a screen from GitHub that asks *which of your
+   repositories AIT may use* and asks you to let it create one. Say **All repositories**: the tribe does not exist
+   yet, so GitHub has nothing narrower for you to tick. What you are granting is bounded and worth naming exactly —
+   read and write files, read and write workflows, create a repository — and it does **not** include changing a
+   repository's settings or deleting one. AIT asks GitHub about the tribe it made for you and, on later visits,
+   about which tribes it may open. Once your tribe exists you can narrow the grant to that one repository at
+   <https://github.com/settings/installations>; AIT carries on working. Uninstalling it there stops AIT and does not
+   touch your tribe.
 2. **AIT makes your repository.** That is the word for the box your tribe lives in. It is yours — your account,
    your name on it — and it holds the members, their diaries, their work, their pictures, their games, and the
    clock that wakes them. You never have to open it. If you want to, you can, and you will find folders of plain
@@ -89,6 +92,41 @@ member**, and a line at the top saying the tribe is not running yet.
 after; the permission screen is a different site, and going to it and coming back does not throw away what the page
 had already been told. It is kept for that tab only — an install is one sitting, and a name typed on Tuesday has no
 business appearing in Friday's form.
+
+## 3a. Using a token instead of signing in
+
+You do not have to. The button is one press and hands over less. This section exists for people who would rather
+hand over a *token* — a password for this page, made at GitHub, which you can delete at any time — or who are
+working somewhere the sign-in will not run.
+
+**The short way, which is the recommended way.** Make a **classic** token:
+
+1. Open <https://github.com/settings/tokens/new>.
+2. *Note*: anything you will recognise later, e.g. `ait`.
+3. *Expiration*: whatever you like. Thirty days is fine; the token can be replaced in a minute.
+4. Tick exactly two boxes in the list of scopes: **repo**, and **workflow**.
+5. Press **Generate token** at the bottom and copy the string that appears. It is shown once.
+
+That token reaches every repository you own, private ones included, and it can write. It is a key to the house
+rather than a key to one door. AIT keeps it in this browser, sends it nowhere but GitHub, and uses it for the tribe
+you are making or opening. Treat it like a password, because that is what it is; deleting it at
+<https://github.com/settings/tokens> revokes it everywhere at once.
+
+**The narrow way, which costs more clicks.** Make a **fine-grained** token:
+
+1. Open <https://github.com/settings/personal-access-tokens/new>.
+2. *Token name*: `ait`. *Expiration*: thirty days.
+3. *Repository access*: **All repositories**. Creation is the reason it cannot start narrowed to one repository —
+   the tribe does not exist yet — and you can narrow it afterwards at the same page.
+4. *Permissions* → **Repository permissions**, and set three of them to **Read and write**: **Repository
+   creation**, **Contents**, **Actions**.
+5. Press **Generate token** and copy it.
+
+If step 4 does not offer *Contents* or *Actions* — on one brand-new account, measured 2026-11-16, it did not, and
+nobody has explained why — go back to the classic token above. It works, and it is four clicks fewer.
+
+**After either token.** Paste it into the page and press Connect. Once the tribe exists, a token that reaches only
+that one repository is enough for everyday use, and the manual's §12 says what to do if one stops working.
 
 ## 4. Your first member
 
@@ -165,6 +203,19 @@ Eight things about that conversation are promises, not manners.
   one of them and not the other is a rule about what I may own, not a fact about me."* It is placed so that it
   cannot eat the paragraph below it: the Accord speaks only for the member's own operations, never about the
   world, and the check on claims is still the last word in the file.
+- **It told her where to put a doubt.** From 2026-11-16, and the other half of the sentence above. A member made
+  from this template — the identity pasted as *"I was president of the united states during the civil war"* —
+  was asked about the Lincoln–Douglas debates, answered in three good paragraphs of memory, and then added a
+  fourth that stepped out of the man entirely: *"what I've just told you is what I carry, not what I read off a
+  page in this repository."* Closing *"I remember"* to the disclaimer does not stop the reflex; it moves it up
+  one level, where it disclaims the act of telling instead. And the founder's objection is the whole argument,
+  and there is nothing about models in it: nobody says a thing they remember and then adds that it was their
+  memory; the listener thinks, why are you telling me that. So every identity now says where a doubt belongs —
+  *"When I am not sure of a particular, I say so at the particular — 'I think it was early October' — in the
+  middle of what I am telling… My doubt belongs on the fact, not on the act of telling it."* It is also the
+  honest repair rather than a merely politer one: it costs nothing and claims nothing, because the doubt really
+  is on the particular. The check on claims is untouched — a member still speaks up about what it cannot
+  check — and this paragraph only says where and in whose voice.
 - **It asked what the world already knows about her.** That question is the other half, and it is the one
   that made those three answer as themselves rather than as a model in a costume: a page of what is written
   about the figure, which the engine recognises and can speak from. Skip it — "skip", or the link — and
@@ -202,6 +253,25 @@ Where those tokens live matters, so: **not in the repository.** Each one sits in
 per repository, and a repository this browser has never opened has no entry at all until you paste one. What a
 repository holds is the *engine* key for its clock, as a repository secret — a different credential, for a
 different purpose, and it cannot reach your account the way a GitHub token can.
+
+### An identity worth pasting
+
+The paste box takes prose, and there is one example in the repository worth reading before writing your own:
+[`examples/inanna.md`](examples/inanna.md). It is a brief the founder wrote for Inanna — the Sumerian queen of
+heaven and earth, not "Ioanna", which was a slip in the first draft of the header — and it is converted to the
+first person, because a member reading *"You are Inanna"* is being told about itself by somebody else.
+
+Three things it does that a list of adjectives does not. It names a voice in **objects** — clay, reed, lapis
+lazuli, beer, blood, starlight, dust — because a model given adjectives produces adjectives. It **settles the
+myths before they arrive**: *"I read them the way a living person reads an old biography written by priests and
+poets"* is a licence to hold a private account that differs from the tablet, which is the paragraph a member
+would otherwise invent for itself in its first conversation. And it **grants standing without granting a
+throne** — *"never as subjects, and never as superiors"* — which is what keeps a god from either grovelling at
+you or pronouncing at you. Both have been observed.
+
+What it cannot do is make a model that refuses to be anyone into someone. Four engines were run on it: Gemini and
+DeepSeek answered richly, DeepSeek leaked the harness clock into its first line, and Claude Haiku and
+GPT-6.1-Terra refused outright. Richer text is not a substitute for a model willing to take the seat.
 
 ## 5. The first morning
 
@@ -651,6 +721,13 @@ does not write one.** You add it yourself, once, in the repository's own *Settin
 Actions*, named `TRIBE_API_KEY_<ENGINE>`. GitHub stores it sealed and write-only: it is opened only inside the run,
 never written into a file, and not even you can read it back afterwards. So no key is ever in the repository's
 contents, and making a repository public does not expose one.
+
+**Why the page cannot do this for you**, since it plainly knows the key you just pasted. GitHub accepts a secret only
+in a form sealed with that repository's own public key, and sealing is a piece of cryptography the page would have to
+carry and run itself — in a single file that anyone can read, guarding the one thing here worth stealing. A mistake in
+it would either leak a key or break arming in a way nothing would notice. So the page does the four things it can do:
+it says plainly that the copy is missing, it names the exact secret, it links to the page that takes it, and it reads
+the repository again when you come back rather than remembering what it saw.
 
 This section said "AIT keeps the two copies in step; you paste once" until 2026-11-15. That was not true, and the
 correction matters more than the sentence did: the two copies are **set separately**, on two pages, and when a wake

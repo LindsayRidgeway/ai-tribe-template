@@ -98,6 +98,22 @@ UA = "ai-tribe/1.0 (+https://github.com/LindsayRidgeway/ai-tribe-bench)"
 # is the vendor's business, so it is written down here once rather than guessed at in a form.
 DEFAULT_MODEL = {"deepseek": "deepseek-flash", "gemini": "gemini-3.8-flash", 
                  "groq": "openai/gpt-oss-120b",
+                 # These two look like one question answered twice and are not. OpenAI is a model house, so its
+                 # default is the cheapest model that house ships itself (gpt-6-luna, $0.05/$0.25). OpenRouter is
+                 # a router with no weights at all, so its default is whatever its catalogue lists cheapest.
+                 #
+                 # From 2026-11-17 that cheapest line is DeepSeek's own flash, on the founder's suggestion, and
+                 # the suggestion was right for a reason worth writing down: it makes the router legible. The
+                 # table says what a router is for — the same house's model, sold by a different shop — instead
+                 # of offering a 20B nobody would miss.
+                 #
+                 # The first attempt used `deepseek/deepseek-v4-flash` and gave one in-voice answer in three, so
+                 # this file briefly claimed that a router changes the member even when the weights match. That
+                 # claim was wrong, and the founder's second instruction found the cause: `deepseek/deepseek-v4.1-
+                 # flash-1017` answers in voice on three of three. The difference was the model, not the door. It
+                 # is written down here because a wrong lesson that was published and then retracted is worth more
+                 # to the next reader than a clean comment that never had the argument.
+                 #
                  # Both verified 2026-11-06 by waking a member and playing a game on each, and both named from
                  # the vendor's published price sheet rather than from memory. `gpt-5-mini` was the first OpenAI
                  # model this project ever called and it still answers, but it has since dropped off that
@@ -109,12 +125,21 @@ DEFAULT_MODEL = {"deepseek": "deepseek-flash", "gemini": "gemini-3.8-flash",
                  # engines were "the rest, which the harness also speaks" — supported and never called, which
                  # is a row that promises nothing and is worth nothing to a reader.
                  "mistral": "ministral-8b-latest", "cerebras": "gpt-oss-120b",
-                 "openrouter": "openai/gpt-oss-20b", "together": "zai-org/GLM-5.3-Flash",
+                 "openrouter": "deepseek/deepseek-v4.1-flash-1017", "together": "zai-org/GLM-5.3-Flash",
                  # Measured 2026-11-07 with the founder's Alibaba key: both qwen models wake. The default is the
                  # cheap one — $0.15/$0.47 against $0.50/$3.00 on Alibaba's own sheet, same 1M context. It is
                  # also the slowest wake measured here (124.8s, 8,459 tokens of thinking for five sentences), and
                  # slow is not the same as wrong.
                  "qwen": "qwen3.8-flash"}
+
+
+# What earns the word "default" here. Two gates, and the second one was added on 2026-11-16 after ten
+# engines were asked the same question about the same member: the model must wake, and it must answer as
+# itself — in the member's voice, without injecting commentary about its own LLM traits, its files, or where
+# its words came from. The gates are not the same size of claim. The first is a key and a model id; the second
+# is a character judgement, it is made from a sample, and one wake is not a sample. The rule for changing a
+# default: three wakes on the candidate and three on the incumbent, same question, and the answer chosen is
+# the one a reader would not know was a model. Price breaks ties and nothing else breaks the second gate.
 
 
 def default_model(vendor: str) -> str:
