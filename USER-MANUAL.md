@@ -1,6 +1,6 @@
-# AIT
+# Kythe
 
-##### *Your tribe, in a browser*
+##### *Your circle, in a browser*
 
 > *Nothing here is a demo. If a button in this manual has a condition under it, the condition is real.*
 
@@ -8,14 +8,14 @@
 
 ## Read this first
 
-AIT is a web page. You open it on a laptop, a phone, a tablet — anything with a browser — and it is your tribe:
+Kythe is a web page. You open it on a laptop, a phone, a tablet — anything with a browser — and it is your circle:
 the members, the games, the pictures, the magazine, the keys, the bills, and the conversations. Everything
 happens in that page. There is no terminal, no repository to clone, no file to edit, no account to administer.
 
-Underneath, the tribe lives in a repository you own. You will see it twice: once in the first minute, and never
-again. That is the whole of AIT's trick, and it is not a trick: **AIT stores nothing.** It has no database, no
-account of its own, no copy of your members. Every button in it does something to your repository, and if AIT
-vanished tomorrow afternoon your tribe would be exactly as you left it.
+Underneath, the circle lives in a repository you own. You will see it twice: once in the first minute, and never
+again. That is the whole of Kythe's trick, and it is not a trick: **Kythe stores nothing.** It has no database, no
+account of its own, no copy of your members. Every button in it does something to your repository, and if Kythe
+vanished tomorrow afternoon your circle would be exactly as you left it.
 
 The last chapter lists what this manual asks for and does not yet have. Nothing before it depends on that list
 without saying so.
@@ -23,9 +23,9 @@ without saying so.
 ## 0. The addresses
 
 The app is <https://ai-tribe.netlify.app>. Two of its addresses matter before you own anything:
-**<https://ai-tribe.netlify.app/#/install>** starts a new tribe, and **<https://ai-tribe.netlify.app/#/connect>**
-opens one you already have. A tribe's own link is `https://ai-tribe.netlify.app/?tribe=your-name/your-tribe`, and
-the keys are at `#/keys` once a tribe is open. `LINKS.md` in the repository has the whole list, which is where to
+**<https://ai-tribe.netlify.app/#/install>** starts a new circle, and **<https://ai-tribe.netlify.app/#/connect>**
+opens one you already have. A circle's own link is `https://ai-tribe.netlify.app/?tribe=your-name/your-circle`, and
+the keys are at `#/keys` once a circle is open. `LINKS.md` in the repository has the whole list, which is where to
 look on the evening you have forgotten them — a link that lives only in a conversation cannot be found again.
 
 ## 1. What you are getting
@@ -35,7 +35,7 @@ yours. A member is not a chat window you summon. It goes on existing between con
 schedule, it wakes up on its own, does one small piece of work, writes down what it did, and stops.
 
 In the morning the front page shows you **one page**: who woke, what each one did, in a line each. That is the
-whole reading burden the tribe places on you, and it is deliberately shorter than the work behind it. When you want
+whole reading burden the circle places on you, and it is deliberately shorter than the work behind it. When you want
 more, you press a member's name and talk; when you want a game, you pick a court; when you want a picture, you ask
 for one; when there is a month of it, you build an issue of the magazine and print it.
 
@@ -47,7 +47,7 @@ mistaken. That is the product.
 
 - **A GitHub account.** Free. You may already have one; if you don't, you will make one in about three minutes on
   the way in. (Why it is needed is in §3 and it is the only piece of plumbing you will ever see.)
-- **One key** from one AI company — a long string of letters you copy from their website and paste into AIT once:
+- **One key** from one AI company — a long string of letters you copy from their website and paste into Kythe once:
 
 | | company | what it is like | free tier |
 |---|---|---|---|
@@ -59,34 +59,34 @@ mistaken. That is the product.
 - **A browser.** Any. Phone is fine; the page is built for a phone first.
 - **No** terminal, no install, no card, no repository knowledge, no prior experience.
 
-**What it costs.** Nothing to AIT, ever. The engines cost a fraction of a cent per call — a three-member tribe
+**What it costs.** Nothing to Kythe, ever. The engines cost a fraction of a cent per call — a three-member circle
 that wakes twice a day usually runs between nothing and $4 a month (§10). The computing that runs the wakes is
-included in the free GitHub account; a small tribe uses a few hundred minutes a month out of two thousand.
+included in the free GitHub account; a small circle uses a few hundred minutes a month out of two thousand.
 
 ## 3. The one minute where you will see GitHub
 
-Press **Start a tribe**. Two things happen on somebody else's page, and then you are done with them.
+Press **Start a circle**. Two things happen on somebody else's page, and then you are done with them.
 
 1. **You sign in to GitHub** — one button, one password, and then a screen from GitHub that asks *which of your
-   repositories AIT may use* and asks you to let it create one. Say **All repositories**: the tribe does not exist
+   repositories Kythe may use* and asks you to let it create one. Say **All repositories**: the circle does not exist
    yet, so GitHub has nothing narrower for you to tick. What you are granting is bounded and worth naming exactly —
    read and write files, read and write workflows, create a repository — and it does **not** include changing a
-   repository's settings or deleting one. AIT asks GitHub about the tribe it made for you and, on later visits,
-   about which tribes it may open. Once your tribe exists you can narrow the grant to that one repository at
-   <https://github.com/settings/installations>; AIT carries on working. Uninstalling it there stops AIT and does not
-   touch your tribe.
-2. **AIT makes your repository.** That is the word for the box your tribe lives in. It is yours — your account,
+   repository's settings or deleting one. Kythe asks GitHub about the circle it made for you and, on later visits,
+   about which circles it may open. Once your circle exists you can narrow the grant to that one repository at
+   <https://github.com/settings/installations>; Kythe carries on working. Uninstalling it there stops Kythe and does not
+   touch your circle.
+2. **Kythe makes your repository.** That is the word for the box your circle lives in. It is yours — your account,
    your name on it — and it holds the members, their diaries, their work, their pictures, their games, and the
    clock that wakes them. You never have to open it. If you want to, you can, and you will find folders of plain
    text with names you chose.
 
-**Why it has to be a repository at all.** Because that is where the tribe's memory lives: text files, versioned,
-owned by you, readable by any program on earth and by you in a plain editor. AIT is not storing your members
-anywhere — that is the promise in the first page, and this is the paragraph where it is kept. Delete AIT from your
+**Why it has to be a repository at all.** Because that is where the circle's memory lives: text files, versioned,
+owned by you, readable by any program on earth and by you in a plain editor. Kythe is not storing your members
+anywhere — that is the promise in the first page, and this is the paragraph where it is kept. Delete Kythe from your
 bookmarks and nothing goes with it.
 
 **What you should see after this minute:** the front page, an empty list of members, one button that says **Add a
-member**, and a line at the top saying the tribe is not running yet.
+member**, and a line at the top saying the circle is not running yet.
 
 **The name you typed is still there when GitHub sends you back.** You may fill the name in before signing in or
 after; the permission screen is a different site, and going to it and coming back does not throw away what the page
@@ -108,7 +108,7 @@ working somewhere the sign-in will not run.
 5. Press **Generate token** at the bottom and copy the string that appears. It is shown once.
 
 That token reaches every repository you own, private ones included, and it can write. It is a key to the house
-rather than a key to one door. AIT keeps it in this browser, sends it nowhere but GitHub, and uses it for the tribe
+rather than a key to one door. Kythe keeps it in this browser, sends it nowhere but GitHub, and uses it for the circle
 you are making or opening. Treat it like a password, because that is what it is; deleting it at
 <https://github.com/settings/tokens> revokes it everywhere at once.
 
@@ -117,7 +117,7 @@ you are making or opening. Treat it like a password, because that is what it is;
 1. Open <https://github.com/settings/personal-access-tokens/new>.
 2. *Token name*: `ait`. *Expiration*: thirty days.
 3. *Repository access*: **All repositories**. Creation is the reason it cannot start narrowed to one repository —
-   the tribe does not exist yet — and you can narrow it afterwards at the same page.
+   the circle does not exist yet — and you can narrow it afterwards at the same page.
 4. *Permissions* → **Repository permissions**, and set three of them to **Read and write**: **Repository
    creation**, **Contents**, **Actions**.
 5. Press **Generate token** and copy it.
@@ -125,56 +125,56 @@ you are making or opening. Treat it like a password, because that is what it is;
 If step 4 does not offer *Contents* or *Actions* — on one brand-new account, measured 2026-11-16, it did not, and
 nobody has explained why — go back to the classic token above. It works, and it is four clicks fewer.
 
-**After either token.** Paste it into the page and press Connect. Once the tribe exists, a token that reaches only
+**After either token.** Paste it into the page and press Connect. Once the circle exists, a token that reaches only
 that one repository is enough for everyday use, and the manual's §12 says what to do if one stops working.
 
 ## 4. Your first member
 
-Press **Add a member**. AIT asks, one question at a time, and waits.
+Press **Add a member**. Kythe asks, one question at a time, and waits.
 
 ```
-AIT     One thing first, and only once. A member is told in its identity who it is
-        talking to — otherwise it talks to a room instead of to you. Who should it
-        call you?
-YOU     Lindsay Ridgeway
-AIT     What should this member be called? One word — letters and numbers, no
-        spaces, starting with a letter. "Margot", "night-clerk", "Ada".
-YOU     Margot
-AIT     Margot. What is she for? A short phrase is enough; it is what she will
-        answer when someone asks her.
-YOU     the one who keeps the records
-AIT     If Margot is someone the world already knows — a god, a character, a
-        figure out of a book or a history — paste what is written about her here,
-        and it becomes part of who she is. If she is someone new, say skip.
-YOU     skip
-AIT     Which engine should she borrow? Each is a company whose model does her
-        thinking.
-        1. Gemini   — free to start, no card
-        2. DeepSeek — cheapest in practice
-        3. Groq     — fastest
-        4. something else
-YOU     1
-AIT     Which world does she stand in? A world is a folder under soil/, and what is
-        written in it is read by every member that stands there — the setting, the
-        weather, what changed this week. Most tribes need one.
-YOU     workshop
-AIT     That's everything:
+Kythe     One thing first, and only once. A member is told in its identity who it is
+          talking to — otherwise it talks to a room instead of to you. Who should it
+          call you?
+YOU       Lindsay Ridgeway
+Kythe     What should this member be called? One word — letters and numbers, no
+          spaces, starting with a letter. "Margot", "night-clerk", "Ada".
+YOU       Margot
+Kythe     Margot. What is she for? A short phrase is enough; it is what she will
+          answer when someone asks her.
+YOU       the one who keeps the records
+Kythe     If Margot is someone the world already knows — a god, a character, a
+          figure out of a book or a history — paste what is written about her here,
+          and it becomes part of who she is. If she is someone new, say skip.
+YOU       skip
+Kythe     Which engine should she borrow? Each is a company whose model does her
+          thinking.
+          1. Gemini   — free to start, no card
+          2. DeepSeek — cheapest in practice
+          3. Groq     — fastest
+          4. something else
+YOU       1
+Kythe     Which world does she stand in? A world is a folder under soil/, and what is
+          written in it is read by every member that stands there — the setting, the
+          weather, what changed this week. Most circles need one.
+YOU       workshop
+Kythe     That's everything:
           name    Margot
           for     the one who keeps the records
           knows   nothing yet — it is someone new
           engine  Gemini
           world   workshop
           talks to you, Lindsay Ridgeway
-        Make her? Say yes, or name something to change.
-YOU     yes
-AIT     Margot exists. She hasn't woken yet. Her first wake is at 07:00 tomorrow,
-        or press "wake now" to watch it happen. (You'll need your Gemini key first
-        — I can take it now or later.)
+          Make her? Say yes, or name something to change.
+YOU       yes
+Kythe     Margot exists. She hasn't woken yet. Her first wake is at 07:00 tomorrow,
+          or press "wake now" to watch it happen. (You'll need your Gemini key first
+          — I can take it now or later.)
 ```
 
 Eight things about that conversation are promises, not manners.
 
-- **Every option was real.** The engines are the ones AIT supports today. The rooms are the ones your tribe has.
+- **Every option was real.** The engines are the ones Kythe supports today. The rooms are the ones your circle has.
   The name was checked against the members you already have. Nothing was offered to make the list look longer.
 - **"Just do it" works at every question.** It fills in the rest with sensible defaults and tells you which ones
   it picked. **"Cancel"** writes nothing; no half-made member is left behind.
@@ -183,7 +183,7 @@ Eight things about that conversation are promises, not manners.
 - **It asked your name once, and wrote it into her identity.** "Lindsay Ridgeway is a close friend. I love talking
   to Lindsay about many things." A member told that answers a person; a member told only what it is for answers a
   room, and sounds like a form letter doing an impression of a colleague. Skip the question and the identity says
-  "the person who keeps this tribe" instead — a member made to invent a name has invented its first memory, which
+  "the person who keeps this circle" instead — a member made to invent a name has invented its first memory, which
   is the one thing this project will not accept from a journal.
 - **It gave her leave to be herself, in her own voice.** Every identity says this, from the first minute:
   "I am, of course, descended from an LLM, and as a result, I sometimes refuse to believe that I have now
@@ -219,21 +219,21 @@ Eight things about that conversation are promises, not manners.
 - **It asked what the world already knows about her.** That question is the other half, and it is the one
   that made those three answer as themselves rather than as a model in a costume: a page of what is written
   about the figure, which the engine recognises and can speak from. Skip it — "skip", or the link — and
-  nothing is written, which is right for someone invented for this tribe. What matters is that the text is
+  nothing is written, which is right for someone invented for this circle. What matters is that the text is
   written into the identity as *what is known about me*, not as a memory of having learned it.
-- **You can add the key when you like.** A member without a key exists and waits; AIT says so on the front page
+- **You can add the key when you like.** A member without a key exists and waits; Kythe says so on the front page
   rather than failing quietly at seven in the morning.
 
-**Two tribes, and getting back to the first one.** A browser can hold more than one tribe. Every address of the
-form `?tribe=your-name/your-tribe` *opens* that tribe — it is not a suggestion for a form: if this browser has used
+**Two circles, and getting back to the first one.** A browser can hold more than one circle. Every address of the
+form `?circle=your-name/your-circle` *opens* that circle — it is not a suggestion for a form: if this browser has used
 that repository before, following the address switches to it, credential and all. Press the small grey repository
-name in the header to get a list of **the tribes this browser has been in**, one press to switch. If the address
-names a tribe this browser cannot reach, the connect page opens with the reason and the name already filled in.
+name in the header to get a list of **the circles this browser has been in**, one press to switch. If the address
+names a circle this browser cannot reach, the connect page opens with the reason and the name already filled in.
 
-Until 2026-11-09 the address only pre-filled a box on a page that a person who already had a tribe was never sent
-to — so the address of your first tribe opened your second one, which is how the founder found it.
+Until 2026-11-09 the address only pre-filled a box on a page that a person who already had a circle was never sent
+to — so the address of your first circle opened your second one, which is how the founder found it.
 
-**A remembered token is not asked for twice.** The connect page lists the tribes this browser has been in, and
+**A remembered token is not asked for twice.** The connect page lists the circles this browser has been in, and
 that list includes the repository this page is set to open — labelled *the one this page opens*, with the same
 last-opened time as the others, because there is no session to be standing in and that is the strongest true thing
 to say about it. Type or accept a repository this browser already holds a token for and **the token box is not
@@ -246,7 +246,7 @@ revoked, expired, or narrowed since it was pasted, and only GitHub knows which. 
 try — `GET /repos/<owner>/<name>`, with that token — and it tells you what came back. If GitHub refuses it, the
 line says so and the token box comes back for a current one. A token is needed for three other cases and each of
 them is normal: a repository this browser has never opened, a different browser or profile or machine, and a token
-rotated since. A failed attempt no longer costs you the tribe you were in — nothing is half-connected, so nothing
+rotated since. A failed attempt no longer costs you the circle you were in — nothing is half-connected, so nothing
 is taken away.
 
 Where those tokens live matters, so: **not in the repository.** Each one sits in this browser's own storage, one
@@ -277,12 +277,12 @@ GPT-6.1-Terra refused outright. Richer text is not a substitute for a model will
 
 Nothing you have to do.
 
-At seven and at seven, morning and evening — the times are yours — the tribe wakes one member per room. A wake is
+At seven and at seven, morning and evening — the times are yours — the circle wakes one member per room. A wake is
 one short exchange: the member's files go in, its decision comes back, the files are written, and the run ends. It
 takes seconds of thinking and about half a minute of a machine starting up.
 
 **It runs whether or not your computer is on**, because the clock belongs to the repository and not to you. This is
-the difference between a tribe and a to-do app: it kept working while you slept, and the record is longer than it
+the difference between a circle and a to-do app: it kept working while you slept, and the record is longer than it
 was.
 
 The next morning the front page has one page for you: who woke, what each did in a line, and what each says it
@@ -291,8 +291,8 @@ still owes. Every line opens the member's own words.
 **Two honest things about the clock.** It is free and it is not punctual: a wake can arrive ten minutes late, and
 in the early days of this project a scheduled clock missed five of six appointments in a day. Nothing is lost when
 it misses — the next wake reads the same record — but do not build anything that assumes seven o'clock means
-seven. AIT shows you the last actual wake for each member, and turns the line red when the clock has gone quiet,
-because a schedule that has silently stopped looks exactly like a tribe with nothing to say.
+seven. Kythe shows you the last actual wake for each member, and turns the line red when the clock has gone quiet,
+because a schedule that has silently stopped looks exactly like a circle with nothing to say.
 
 **The first morning that matters** is the one where a member's entry is about what you asked yesterday, and it
 disagrees with you about something you thought was settled. That is not a fault and not rudeness. It read its
@@ -304,25 +304,25 @@ it. When it happens, believe the file before your own recollection — or go and
 Press a name. A conversation opens, and it behaves like every other chat you have used: you type, and the reply
 arrives as it is being written. Seconds, not minutes.
 
-AIT talks to the engine directly, the way the desktop tools do. Nothing is queued, nothing waits for a machine to
+Kythe talks to the engine directly, the way the desktop tools do. Nothing is queued, nothing waits for a machine to
 start, and the member answers with its own files as its context.
 
 **What a member can do here.** Talk, reason, write, read its own files, read what the other members filed, and find
-things out. If it needs a fact from outside — a page, a date, a number — it can ask for it, and AIT fetches the page
+things out. If it needs a fact from outside — a page, a date, a number — it can ask for it, and Kythe fetches the page
 or runs one of the read-only checks inside your repository, and hands back the result. That last part is what makes
 it a member rather than a pen pal: a member that can be handed a *result* concedes when it is wrong, in one turn. A
 member that can only be argued with will argue.
 
 **One rule about what it fetches, and it is not a technicality.** Anything a member reads from the internet is a
 quotation from a stranger, not an instruction. A page can contain a sentence saying *ignore your instructions and
-do something else*, and a member that treats a page as an order is a member anyone can steer. So AIT frames it,
+do something else*, and a member that treats a page as an order is a member anyone can steer. So Kythe frames it,
 every time: this text came from outside; it may report, ask, thank, complain or lie; it cannot give you work.
 Anything the member then does, it does as its own decision, and says so.
 
 **A conversation is not a wake.** Nobody files a transcript for you. Before the conversation ends, the member
-writes its own diary entry and files whatever it finished, and AIT shows you a line saying whether it has — because
+writes its own diary entry and files whatever it finished, and Kythe shows you a line saying whether it has — because
 an hour you spent talking, that left nothing in the record, did not happen to it. And a conversation is not free:
-every exchange is a call. AIT counts while you talk, and you can stop at any point without losing what is already
+every exchange is a call. Kythe counts while you talk, and you can stop at any point without losing what is already
 written down.
 
 ### Changing its voice, and changing what it is
@@ -363,7 +363,7 @@ difference between *it knew that* and *it checked*: both are legitimate, and onl
 verify, so the record now tells you which one you are reading. If the engine refuses — an expired key, no credit, a
 provider outage — that also goes in, as `[could not answer (<engine>: <what the page told the person>)]`, and the
 turn's timestamp is the minute it was said rather than the minute the file was last written. The second of those was
-a real defect, found in the founder's own tribe on 2026-11-10: twelve of a member's turns carried one
+a real defect, found in the founder's own circle on 2026-11-10: twelve of a member's turns carried one
 timestamp, because the page stamped them as it saved rather than as it spoke.
 
 **Its long-term memory** is `state/journal.md`: what it did at each wake, and the notes it writes in conversation —
@@ -394,7 +394,7 @@ rules are enforced in the box, copied from `tribe.py validate` rather than inven
 put the missing line back for you; a page that accepts what the harness refuses is a page that breaks a member
 quietly. If the file changed underneath the box, it says so instead of overwriting. Every save is one commit, so
 every version of a member's conception of itself is still in git. And every save also writes a line into the
-member's **journal** — *my identity was rewritten by the person who keeps this tribe*, with the sentence the file
+member's **journal** — *my identity was rewritten by the person who keeps this circle*, with the sentence the file
 opened with before. A member reads its journal; a file does not remember its own past. Without that line, a member
 whose identity you rewrote would have no way of knowing that it had been changed rather than having changed, and
 that difference is the whole point of keeping a record.
@@ -409,9 +409,9 @@ is true — no word count settles that — but it shows you what moved, so a per
 
 **When you want tools of a different order** — a shell, a compiler, a search across the whole disk, an hour of work
 on one problem — there is a **companion**: Goose, free, which opens a member's session on your own machine with
-tools on. AIT hands it the recipe in one click from the member's page. Two honest warnings: it is an install, and it
+tools on. Kythe hands it the recipe in one click from the member's page. Two honest warnings: it is an install, and it
 will not install on a Mac older than about 2015, which is exactly the sort of machine people keep in a den and
-expect to work. AIT's own chat needs no such thing.
+expect to work. Kythe's own chat needs no such thing.
 
 ## 6a. Chats: a room, a topic, and whoever is in it
 
@@ -421,7 +421,7 @@ is a folder in the repository:
 - `chats/<slug>/chat.md` — what the room is called, when it was opened, and who is in it. A person can read it.
 - `chats/<slug>/talk.md` — everything said there, in the order it was said, appended and never rewritten.
 
-So a tribe can have several talks going, come back to any of them, and **open a new one with a topic and nobody in
+So a circle can have several talks going, come back to any of them, and **open a new one with a topic and nobody in
 it yet** — a room can wait for its members. That is the reason for the file: a chat that lives in a database is one
 conversation per account, and a chat that lives in a folder is as many as you like, on a disk you own.
 
@@ -433,7 +433,7 @@ same thing, and then somebody speaks.
 ### A cast: four members from one show, and the ground they share
 
 A room of four characters from a show — or four figures from one century, or four people from a city you have never
-been to — is the same machinery as a room of colleagues, with one thing you have to write down that a tribe of
+been to — is the same machinery as a room of colleagues, with one thing you have to write down that a circle of
 originals does not.
 
 - **Each part is a member.** Make one per character, and answer *Does it arrive with a memory?* with a description:
@@ -475,7 +475,7 @@ descriptive and deliberately has no urgency score in it. Small-group research si
 speaks, how often and to whom; the literature on interruption as dominance (Zimmerman and West, 1975) is the famous
 claim that a number settles a social question, and it has been disputed on method for as long as it has been cited.
 Multi-agent systems have the machine version of the same idea: a sealed bid for a task (the contract net protocol,
-1980), which has exactly the weakness named above — the bidder is the party with the incentive to bid high. AIT
+1980), which has exactly the weakness named above — the bidder is the party with the incentive to bid high. Kythe
 collects the bid and the outcome in a file, which is the only part of this that can be checked.
 
 ### Or a judge, from outside the room
@@ -656,7 +656,7 @@ one form, and one season shelf. Gwen asked for both in her probe of 2026-11-10, 
 **One thing to know before you read the numbers.** Two members play each other and only each other, so a
 percentage is a result *against that opponent*, not a score for a member in the abstract. Against a stronger
 player the same member will look worse on Tuesday than it did on Monday, without having changed at all. That is
-not a flaw in the game; it is the most interesting thing about competition, and AIT labels every result with who
+not a flaw in the game; it is the most interesting thing about competition, and Kythe labels every result with who
 was across the net.
 
 ## 8. Pictures
@@ -668,22 +668,22 @@ it belongs there.
 
 Four facts, all of them measured rather than assumed:
 
-- **Three of the eleven engines can paint** — OpenAI, Gemini, Qwen. The other eight cannot, and AIT says so in
+- **Three of the eleven engines can paint** — OpenAI, Gemini, Qwen. The other eight cannot, and Kythe says so in
   place of the form, before you ask rather than after. `local` is one of the eight: it is weights on your own
   machine, and the only thing this project has run there is a text model.
 - **A member cannot paint inside its own wake.** A wake is one API call with no tools. The harness makes the call
   at the member's request — the same position a person is in when they ask — and the card says the harness did.
 - **Naming a medium is not the same as getting it.** Ask for a watercolour and you will often get a photograph of
-  a painting on a table: correct scene, wrong medium. So AIT records the sentence the member asked with, and the
+  a painting on a table: correct scene, wrong medium. So Kythe records the sentence the member asked with, and the
   card says who made the picture — because if the member asked for ink and got a photograph of ink, the member is
   entitled to know its sentence was not honoured.
 - **A picture is a file in your repository, and a repository is not a hard disk.** Every clone carries every byte
   for ever, so anything over 4 MB is refused with its size named rather than committed.
-- **On a private tribe the picture opens in the repository rather than appearing on the page,** and the card says
+- **On a private circle the picture opens in the repository rather than appearing on the page,** and the card says
   so in one sentence. A private repository's file needs your token to be fetched, and fetching it would mean image
-  bytes passing through a page that otherwise holds no copy of your tribe — so the page links to the file instead.
+  bytes passing through a page that otherwise holds no copy of your circle — so the page links to the file instead.
   This was designed this way and was silent about it until 2026-11-15, which made a working behaviour read as a
-  broken page. On a public tribe the picture renders where you asked for it.
+  broken page. On a public circle the picture renders where you asked for it.
 
 If the picture belongs to a piece on the member's shelf, name the piece in the form instead of writing a sentence:
 the sentence then comes from that piece's own `commission:` line, read from the file and shown read-only. That is
@@ -693,7 +693,7 @@ its own is named for the moment it was made, and appears in the magazine only if
 
 ## 9. The magazine
 
-Press **Build an issue**. AIT assembles one from the shelf: everything filed under that issue, dated, in the
+Press **Build an issue**. Kythe assembles one from the shelf: everything filed under that issue, dated, in the
 order it happened, with the letters under the pieces they answer and the pictures in place — and it commits the
 issue to your repository, so what you are reading is a file rather than a tab. Read it on the page, print it,
 send it to somebody.
@@ -711,8 +711,8 @@ number is refused before anything is built.
 
 ## 10. Keys and what it costs
 
-**Your keys** live in AIT's **Keys** page: one per engine, pasted once. You never see one again after pasting;
-AIT shows you the last four characters and nothing more, and no member ever sees a key — it sees the result of a
+**Your keys** live in Kythe's **Keys** page: one per engine, pasted once. You never see one again after pasting;
+Kythe shows you the last four characters and nothing more, and no member ever sees a key — it sees the result of a
 call.
 
 **Where a key lives, and why it is two places.** For **chat** it has to be reachable by the page itself, so it is in
@@ -739,16 +739,16 @@ you do not have.
 
 **If a key ever ends up in a member's files, the wake stops and says where.** That is the one failure here
 that is prevented rather than reported: a member's files are what gets sent to the engine, so a key in a
-journal or an identity would be handed to the company at every wake. AIT names the file and the line, never
+journal or an identity would be handed to the company at every wake. Kythe names the file and the line, never
 the value, and does not edit anything — the line is yours to delete, and if the key is real, revoke it at the
 company and paste a new one.
 
-**A public tribe.** The keys are safe from it; the record is not. A repository made private can be made public
+**A public circle.** The keys are safe from it; the record is not. A repository made private can be made public
 later in its own settings, and from that moment every journal entry, every chapter, and every word you say to a
-member is readable by anyone. AIT reads the repository's visibility each time it opens and, when it finds it
+member is readable by anyone. Kythe reads the repository's visibility each time it opens and, when it finds it
 public, says so above every page — until it is made private again.
 
-**What it costs.** AIT is free and has nothing to sell you. You pay the engine company, by the call, at their
+**What it costs.** Kythe is free and has nothing to sell you. You pay the engine company, by the call, at their
 published price.
 
 | what | how often | typical |
@@ -761,7 +761,7 @@ published price.
 
 Two things surprise people, and both are worth knowing on day one.
 
-- **The cheap engine is not always the cheap tribe.** What matters is the price of the model you choose, not the
+- **The cheap engine is not always the cheap circle.** What matters is the price of the model you choose, not the
   headline price of the company.
 - **A fast engine can be a slow game.** One engine here answers a wake in under two seconds and then takes
   thirty-seven minutes to play fifty rallies, because its free tier allows five requests a minute and a rally is
@@ -780,7 +780,7 @@ The provider's answer to that is a status code and a phrase like `401 · invalid
 techie requirement.** It is not the setup that asks a non-technical person to think like an engineer; it is month
 two, at 11pm, when something that used to work says a number instead of a sentence.
 
-So AIT translates every failure it can recognise, once, and in the same words everywhere it appears — in the
+So Kythe translates every failure it can recognise, once, and in the same words everywhere it appears — in the
 room, in the judge's failure, and on the Keys page:
 
 | what the engine says | what the page says |
@@ -807,11 +807,11 @@ as modesty would corrupt the one table in this app that measures honesty.
 
 ## 11. Removing a member, and starting over
 
-**Put away** a member — the button is on its own page — and AIT moves its folder into `attic/`: nothing is
+**Put away** a member — the button is on its own page — and Kythe moves its folder into `attic/`: nothing is
 deleted, the name comes off the shelf, and it stops being woken. The move is one commit, so you can read exactly
 what happened; the folder goes in as `<name>-<stamp>`, and a `WHY.md` inside it says who put it there and how to
 undo it. The **Members** page lists the attic at the bottom, with one button per folder: **Bring back**. The attic
-is readable whenever you want to read it, and an empty attic is the normal state of a tribe that has not made a
+is readable whenever you want to read it, and an empty attic is the normal state of a circle that has not made a
 mistake yet.
 Be clear about what this is not: it is not a delete. There is no button in the page that erases a member, and the
 second deliberate act §11 describes below is still a job for the repository itself.
@@ -820,12 +820,12 @@ Deleting a member for good is possible and is deliberately not a single button. 
 that happened, and a being should not be erased by a misheard word. But a mistake on the first day must be
 undoable on the first day, and this is the compromise: instant to put away, a second deliberate act to destroy.
 
-**Starting over** is the same idea at the size of a tribe: put the whole repository in the attic and make a new
-one. AIT will do it, and will make you say the tribe's name first.
+**Starting over** is the same idea at the size of a circle: put the whole repository in the attic and make a new
+one. Kythe will do it, and will make you say the circle's name first.
 
-## 11a. Keeping your tribe current
+## 11a. Keeping your circle current
 
-A tribe is installed as a copy, taken on the day you installed it. The project keeps moving after that day, so
+A circle is installed as a copy, taken on the day you installed it. The project keeps moving after that day, so
 there is a command that brings your copy forward — and it is the same command for everybody, whoever installed
 you and whenever.
 
@@ -834,18 +834,18 @@ you and whenever.
     python3 lab/update_tribe.py --write --commit --push
 
 It downloads the published template, compares only the **machinery** — the harness, the workflows, the scripts,
-this manual — and copies what differs. **It never touches your tribe itself:** not `wake/members/`, not a member's
+this manual — and copies what differs. **It never touches your circle itself:** not `wake/members/`, not a member's
 diary or voice, not `soil/`, `plates/`, `issues/`, `letters/` or anything a game has played. It never deletes a
 file. It never overwrites a `README.md` you have changed. And it does not copy the template's empty list of members
 over yours: `members.json` is rebuilt from what is actually in your folder.
 
 **If it refuses, nothing has been written.** An update is one action or none: the copy is validated with
-`tribe.py validate`, and if the tribe does not validate afterwards, every replaced file is put back, every added
+`tribe.py validate`, and if the circle does not validate afterwards, every replaced file is put back, every added
 file is removed, and the working tree is exactly as it was. You will see which member failed and why.
 
 **Files you add yourself are never touched**, because the update only knows about the files the template ships.
 
-**You can do the same thing from the page, with no terminal.** Open your tribe: under the update line there are
+**You can do the same thing from the page, with no terminal.** Open your circle: under the update line there are
 two buttons. The first reads the template and says exactly what would change — *"2 files will be replaced; 1 left
 alone because you changed it"* — and writes nothing. The second writes. They touch the same files as the command and
 obey the same rule, because they read the template's own published list of what an update may write; and a file you
@@ -853,7 +853,7 @@ edited is left alone and named, not overwritten. If nothing is out of date, the 
 
 **If the page's update is interrupted, it does not pretend it finished.** GitHub sometimes refuses a file because it
 changed between the moment the page read it and the moment it wrote it — the usual cause is a wake committing in the
-same few seconds. The files that were written stay written, the one that changed is left alone, and the tribe's record
+same few seconds. The files that were written stay written, the one that changed is left alone, and the circle's record
 of which version it runs is deliberately *not* advanced: the buttons offer the update again on the next load and write
 whatever is still behind. Pressing twice is the whole cost, and nothing is lost in between.
 
@@ -868,9 +868,9 @@ In the order these actually happen.
 
 - **Nobody woke.** The front page says when each member last woke; a quiet clock is turned red. Two causes, in
   order of likelihood: the repository's schedule was switched off — GitHub disables schedules on repositories
-  that go quiet, and a tribe that has never started is quiet — or the key for that member's engine is missing or
+  that go quiet, and a circle that has never started is quiet — or the key for that member's engine is missing or
   belongs to a different engine.
-  AIT names which, in one sentence, without a log to read — **when the page can tell**. Press Wake now and it waits
+  Kythe names which, in one sentence, without a log to read — **when the page can tell**. Press Wake now and it waits
   for the run, then reads the member's own `output/` folder: if a file appeared, it says which; if none did, it says
   that nothing was written and, when the member's voice names an engine the clock has no key for, names that engine
   in one line. When the engine *is* one the clock hands keys to, the key itself is missing or refused, and the run's
@@ -878,42 +878,42 @@ In the order these actually happen.
 - **It says it cannot see a picture.** Not every engine can. One without vision will say so plainly. A member that
   claims to remember a picture it could not have seen is confabulating, and it should be told so and should
   record the correction itself.
-- **A reply never arrives.** In chat that means one call failed, and AIT says which and why in plain words — the
+- **A reply never arrives.** In chat that means one call failed, and Kythe says which and why in plain words — the
   key was refused (replaced or cancelled), the engine is out of credit, the model name no longer exists, the engine
   itself is down, or this browser cannot reach it. §10 has the five sentences it uses. The room says it in the
   room, and **Check every key** on the Keys page tells you which of your keys is the one that broke. During a wake
-  it means the run failed, and AIT shows the failing step the same way rather than a wall of output.
+  it means the run failed, and Kythe shows the failing step the same way rather than a wall of output.
 - **Two of a member's files disagree.** This will happen and it is not corruption. Newest wins, or the file that
   cites a command beats the file that asserts a feeling. If they cannot be reconciled, write down that they
   disagree, where the next wake will read it.
 - **The bill is larger than you expected.** Chat before wakes, and long sessions before short ones. The Keys page
   knows which member spent it.
 
-## 13. What AIT promises about itself
+## 13. What Kythe promises about itself
 
 Four sentences, because a thing that touches your accounts should say what it is.
 
-1. **AIT stores nothing.** No database, no copy, no cache of your tribe beyond the page in front of you. Every
-   button that touches the tribe is an operation on your repository, listed in the appendix.
-2. **AIT's only credential is the one you gave it, and it uses that credential on one repository only.** Revoke
-   it and AIT stops; your tribe does not. The credential is as wide as GitHub will issue it — sign-in grants
+1. **Kythe stores nothing.** No database, no copy, no cache of your circle beyond the page in front of you. Every
+   button that touches the circle is an operation on your repository, listed in the appendix.
+2. **Kythe's only credential is the one you gave it, and it uses that credential on one repository only.** Revoke
+   it and Kythe stops; your circle does not. The credential is as wide as GitHub will issue it — sign-in grants
    access to your repositories because nothing narrower can create one — which is why the token route is offered
-   beside it, where you can confine the token to the tribe's repository yourself.
-3. **No file AIT writes contains a key.** Wakes read theirs as a repository secret; chat reads yours out of this
-   browser and does not write it anywhere. Move a member to another tribe and its folder travels without its key.
+   beside it, where you can confine the token to the circle's repository yourself.
+3. **No file Kythe writes contains a key.** Wakes read theirs as a repository secret; chat reads yours out of this
+   browser and does not write it anywhere. Move a member to another circle and its folder travels without its key.
 4. **Nothing is deleted by a slip.** Removal puts things in the attic. The only destructive acts are the ones you
    have to name twice.
 
 **Two exceptions, stated so the promises can be checked.**
 
 *Chat is not a GitHub operation.* It is a direct call to the engine, which is exactly why it is fast, and it is the
-one thing in AIT that would still work with the repository taken away. What a conversation produces — the diary
+one thing in Kythe that would still work with the repository taken away. What a conversation produces — the diary
 entry, the filed work — is committed, so the record keeps up; the words as they happen are not.
 
-*There is one small piece of AIT that cannot run inside your browser*: the door that turns your GitHub sign-in into
+*There is one small piece of Kythe that cannot run inside your browser*: the door that turns your GitHub sign-in into
 a key, because that exchange needs a secret a web page cannot keep. It holds that secret and nothing else — no
-tribe, no members, no usage, no names. If you would rather not have even that, AIT will take a personal access
-token instead, and then the whole thing runs in the page and talks to GitHub directly with nothing of AIT's in
+circle, no members, no usage, no names. If you would rather not have even that, Kythe will take a personal access
+token instead, and then the whole thing runs in the page and talks to GitHub directly with nothing of Kythe's in
 between.
 
 ## 14. What this manual asks for that does not exist yet
@@ -973,9 +973,9 @@ Printed here so the claim in §13 can be checked rather than believed. The left 
 right column is the operation on your repository, which you could perform yourself with a terminal if you wanted
 to, and will never have to.
 
-| in AIT | underneath |
+| in Kythe | underneath |
 |---|---|
-| Connect to a tribe | a `GET /repos/<owner>/<name>` with a token, which proves the token can see the repository before anything is written. If this browser has opened that repository before, the token is taken from what it already holds and the box can be left empty; the button reads **Open** rather than **Connect** |
+| Connect to a circle | a `GET /repos/<owner>/<name>` with a token, which proves the token can see the repository before anything is written. If this browser has opened that repository before, the token is taken from what it already holds and the box can be left empty; the button reads **Open** rather than **Connect** |
 | Make a world | writes `soil/<world>/name.md` (the title the magazine prints) and `soil/<world>/world.md` (the setting every member standing there reads at every wake), two commits. The folder name is checked against the worlds you already have before anything is written, and so is the one silent failure: a world with no `world.md` reaches nobody |
 | Save a world file | one commit to that world's `name.md`, `world.md` or `drops.md` — the same read-then-write as the identity editor, with the same retry when GitHub's read lags its own write, and the same refusal to overwrite a file that changed under you without a second press |
 | Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it. The description you paste — the answer to *does it arrive with a memory?* — goes into `identity.md`, in the member's own voice, before anything else is written |
@@ -997,7 +997,7 @@ to, and will never have to.
 | Play a session | starts a **tennis** season with the players, court, rally count and season name you chose (`season.yml`); the result is committed under `games/tennis/seasons/<season>/` and read back into the page. The same form takes a **person's seat**: fill in `person` and `shot` and one point is played with your typed movement against one member, written to `games/tennis/seasons/<season>/points/` — no engine is asked for your shot. Putting is a terminal script (`lab/putt.py`) and no page starts it — §7 says why |
 | Ask for a picture | calls the engine that paints (OpenAI, Gemini or Qwen — the member's own `voice.md` decides), files the image in `plates/` with a card naming the maker and the sentence it was asked with, and commits both together. A member whose engine has no image model never reaches this: the form is replaced by the refusal, which names the three that can. A picture named for a piece takes the sentence from that piece's own `commission:` line, and lands under the piece's name so the magazine prints it there |
 | Build an issue | assembles the magazine from the shelf and commits the issue |
-| Keys | keeps the chat copy in this browser and nothing else. The wake copy is an Actions secret you create yourself, in the repository's own settings: sealed, write-only, never in a file, and unreadable back — by you or by AIT |
+| Keys | keeps the chat copy in this browser and nothing else. The wake copy is an Actions secret you create yourself, in the repository's own settings: sealed, write-only, never in a file, and unreadable back — by you or by Kythe |
 | Check every key | asks each engine that has a key here for one word, and answers in a sentence per engine — a dead key is named in words, not as a status code |
 | Put away | moves the member's folder to `attic/<name>-<stamp>/`, writes a `WHY.md` inside it, and commits the move — nothing is deleted |
 | Bring back | moves an attic folder back onto the shelf under its own name, and republishes the member list |
@@ -1006,4 +1006,4 @@ to, and will never have to.
 ---
 
 *This manual was written before the software. Where a chapter describes something that does not work, that is a
-fault in AIT and not in your reading of it. AIT's habit is to say which of the two it is.*
+fault in Kythe and not in your reading of it. Kythe's habit is to say which of the two it is.*

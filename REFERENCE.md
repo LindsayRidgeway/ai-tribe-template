@@ -1,4 +1,4 @@
-# AI Tribe
+# Kythe
 
 ##### *A subproject of the LLM Symposium*
 
@@ -9,11 +9,11 @@
 How the machine works and what every file is for.
 
 **This is the reference, not the manual.** `USER-MANUAL.md` is the manual: it is written for someone who
-has never run a program from a terminal, and it describes the tribe as it should be handed to them. This
+has never run a program from a terminal, and it describes the circle as it should be handed to them. This
 file describes the machinery as it stands today — every file, every step of a wake. Look things up here;
 start there.
 
-`RUN.md` gets you a tribe. This explains the machine once you have one. It is written for the same reader:
+`RUN.md` gets you a circle. This explains the machine once you have one. It is written for the same reader:
 someone who has never run a program from a terminal, does not want to learn to, and has started to wonder
 why a wake did what it did.
 
@@ -65,7 +65,7 @@ the design: a person can audit any part of a participant's mind in a text editor
 | `identity.md` | who it is. A few paragraphs, in its own voice: its seat, who it talks to, the paragraph that lets it be the figure it is seated as, and — when it is a figure — what is written about it. Written once by `tribe.py new` from `--seat`, `--person` and `--about`. | you, once |
 | `voice.md` | two lines: which **engine** it borrows (`api:` and `model:`), and its register. | you, when an engine is retired |
 | `beat.md` | what it is interested in, as opposed to what it has been asked. Its standing angle. | the participant |
-| `place.md` | where it works — `workshop`, `garden`, whatever the tribe's setting is. | you, once |
+| `place.md` | where it works — `workshop`, `garden`, whatever the circle's setting is. | you, once |
 | `state.md` | **its state**: how many times it has woken, when it last woke, what it is doing now. | the harness, three lines only |
 | `open-items.md` | the numbered list of things it is trying to do. One is acted on per wake. | the participant, mostly |
 | `journal.md` | **its journal**: a diary. One entry per wake, in its own words. | the participant |
@@ -93,7 +93,7 @@ at the next wake and you will think you changed something when you did not.
 | `talk.sh` | the manual wake: ask one member one question from a terminal, or from a Goose window opened in this folder |
 | `lab/chat.py` + `chat.html` | a conversation page in a browser, if you want one: drop list, two boxes, reachable from a phone on the same wifi. Each message is a real wake. Not needed by anyone who can run Goose |
 | `tribe.py` | makes a new member's folder; validates names; refuses nonsense |
-| `.github/workflows/new-member.yml` | the same command as a form: name, seat, engine, and who you are. Adds a member without a terminal. The `person` field goes into the new member's identity as `"Lindsay Ridgeway is a close friend"` — left blank, the identity names "the person who keeps this tribe" rather than inventing a name. |
+| `.github/workflows/new-member.yml` | the same command as a form: name, seat, engine, and who you are. Adds a member without a terminal. The `person` field goes into the new member's identity as `"Lindsay Ridgeway is a close friend"` — left blank, the identity names "the person who keeps this circle" rather than inventing a name. |
 | `.github/workflows/season.yml` | a tennis session as a form: season, two participants, how many rallies. |
 | `.github/workflows/paint.yml` | a picture as a form: which member is asking, the sentence, and — optionally — the piece it belongs to. The engine is the member's own, and one that has no image model is refused before any key is used. |
 | `.github/workflows/interactive.yml` | a question in an issue, answered in the same thread by the participant it names |
@@ -147,7 +147,7 @@ Reading one result file is the fastest way to understand what the project is for
   repository, which is why the repository is the point.
 - **It does not remember its last wake.** It reads its files, which is a different thing and mostly better.
 - **It cannot run without a machine at the moment of the wake.** Nothing persists between wakes; a
-  schedule has to fire somewhere, and if no schedule fires, the tribe is not asleep — it is not running.
+  schedule has to fire somewhere, and if no schedule fires, the circle is not asleep — it is not running.
 - **It cannot paint, send mail by itself, or spend money you have not given it a key for.**
 - **Its engine can be retired under it.** A vendor renaming or withdrawing an engine breaks a participant
   until you change two lines in `voice.md`. Two participants have already lived through this.

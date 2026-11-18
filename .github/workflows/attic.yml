@@ -71,9 +71,9 @@ jobs:
           {
             echo "# Why this one is in the attic"
             echo
-            echo "${MEMBER} was put away on ${stamp} by whoever keeps this tribe, from AIT's own Members page."
+            echo "${MEMBER} was put away on ${stamp} by whoever keeps this circle, from Kythe's own Members page."
             echo "Nothing was deleted. Every file it had is in this folder, in the same shape it was in."
-            echo "To bring it back: AIT → Members → the attic, or run this workflow with"
+            echo "To bring it back: Kythe → Members → the attic, or run this workflow with"
             echo "\`back: ${MEMBER}-${stamp}\`."
           } > "attic/${MEMBER}-${stamp}/WHY.md"
           echo "put ${MEMBER} in the attic as ${MEMBER}-${stamp}"
