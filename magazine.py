@@ -370,7 +370,7 @@ def plate_block(work: dict, root: Path | None = None) -> list[str]:
 
 
 def outbound_block(work: dict) -> list[str]:
-    """A letter to somebody outside the tribe, and whether a person posted it.
+    """A letter to somebody outside the circle, and whether a person posted it.
 
     Two header lines, `to:` and `posted:`, and nothing invented: before `posted:` exists the magazine says
     in as many words that the letter has not left. A member writing an address is not a letter sent, and a
@@ -380,10 +380,10 @@ def outbound_block(work: dict) -> list[str]:
     if not to:
         return []
     subject = (work.get("subject") or "").strip()
-    out = [f"*Addressed out of the tribe: to {to}" + (f" — {subject}" if subject else "") + ".*", ""]
+    out = [f"*Addressed out of the circle: to {to}" + (f" — {subject}" if subject else "") + ".*", ""]
     posted = (work.get("posted") or "").strip()
     if posted:
-        out += [f"*Posted from a person's own mail client on {posted}. The tribe cannot send mail; a human "
+        out += [f"*Posted from a person's own mail client on {posted}. The circle cannot send mail; a human "
                 f"sends what it writes.*", ""]
     else:
         out += ["*Not posted. Nothing in this repository sends mail: a person reads this and sends it, and "
@@ -523,7 +523,7 @@ def build(issue: str, works: list[dict] | None = None, root: Path | None = None)
 def reply_graph(works: list[dict]) -> list[tuple[str, str, str]]:
     """Who answered whom, derived from the `ref` line in each work's header.
 
-    This is the tunnel map. A tribe that only writes is a shelf; a tribe whose works point at each other
+    This is the tunnel map. A circle that only writes is a shelf; a circle whose works point at each other
     is a workshop. Nothing here is typed: the edge exists if a file names another file (or its title).
     """
     by_file = {w["file"]: w for w in works}

@@ -45,7 +45,7 @@ on:
         required: false
         default: ""
       person:
-        description: "you: the human this tribe belongs to, as you would write it — 'Lindsay Ridgeway'. It goes into the member's identity so it knows who it is talking to"
+        description: "you: the human this circle belongs to, as you would write it — 'Lindsay Ridgeway'. It goes into the member's identity so it knows who it is talking to"
         required: false
         default: ""
       about:
@@ -152,7 +152,7 @@ jobs:
       - name: Commit it to the record
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi

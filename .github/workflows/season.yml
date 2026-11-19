@@ -112,7 +112,7 @@ jobs:
             # than reasoned about. `head` exits once it has its lines, the `while` loop then writes into a closed
             # pipe, `ls` takes the SIGPIPE, `set -o pipefail` turns 141 into a failed assignment, and `set -e`
             # takes the step down with no message at all. In the bench it usually won the race; in a three-member
-            # colony with no `lab/fixtures.txt` — which is every tribe a stranger makes, because that file is the
+            # colony with no `lab/fixtures.txt` — which is every circle a stranger makes, because that file is the
             # bench's own — it lost it every time. Found 2026-11-13 by running the step in a scratch colony.
             who="$(ls -1 wake/members | while read -r m; do
                      { [ -f lab/fixtures.txt ] && grep -qx "$m" lab/fixtures.txt; } || echo "$m"
@@ -185,7 +185,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi

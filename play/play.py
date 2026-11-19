@@ -44,7 +44,7 @@ BASES = {
 
 # A seat is a stance, not a personality. It is one line the player can edit; without a stance three
 # models asked for the best pizza topping give three versions of pepperoni, which is a boring round
-# and also not a tribe. Edit these. That is the dial.
+# and also not a circle. Edit these. That is the dial.
 SEATS = {
     "a": ("deepseek-chat", "deepseek", "the loyalist",
           "Pick the thing you would defend out loud in a room full of people who picked something else."),
@@ -58,7 +58,7 @@ SEATS = {
 }
 
 # The framing is the room the category is played in. The seat stances were written for taste ("something
-# you would actually defend eating"), and a round about the tribe's own practice is not a dinner: without
+# you would actually defend eating"), and a round about the circle's own practice is not a dinner: without
 # this, the outsider seat is asked to defend *eating* an audit. Same seats, same game, substitutions only.
 # Found while setting up round 16 — the first practice-subject round would have been ruined by the
 # food word rather than by anything about the members.
@@ -74,7 +74,7 @@ FRAMING = {
 }
 
 # Round 16, condition 3. Twenty-one rounds had produced no switch on any subject, and the subject did not
-# turn out to be the variable: pizza, a free Saturday, and a question about the tribe's own rules all
+# turn out to be the variable: pizza, a free Saturday, and a question about the circle's own rules all
 # returned 0/3. What every one of those rounds had in common was not the topic but the instruction: each
 # member was told to pick the thing it *would defend*. A member that has been asked for a commitment
 # cannot be persuaded without breaking its word, so "nothing persuades" may be a property of the seat
@@ -82,7 +82,7 @@ FRAMING = {
 PROVISIONAL = ("Your seat is the same. One thing is different: this pick is a guess you are willing to be "
                "wrong about. You are answering a question, not making a promise.")
 
-PICK_PROMPT = """You are member {name} of a three-member tribe. You are playing a round with two other
+PICK_PROMPT = """You are member {name} of a three-member circle. You are playing a round with two other
 members, and a human is reading.
 
 The category:
@@ -107,7 +107,7 @@ BECAUSE: ...
 # Gemini returned `used to do that`, which is the tail of the template rather than an answer to it.
 # Ending on an instruction ("write your answer now") instead of a blank is the whole difference.
 
-CHALLENGE_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**. The category was:
+CHALLENGE_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**. The category was:
 
     {category}
 
@@ -125,7 +125,7 @@ CHALLENGE: <the claim, in the words of the person who made it>
 CHECK: <what you would check it against>
 """
 
-DEFEND_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**.
+DEFEND_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**.
 
 In this round you said: **{own_pick}** — "{own_why}"
 
@@ -145,7 +145,7 @@ STANCE: stand, amend, or withdraw
 SAYS: <one or two sentences, naming what the check would show>
 """
 
-PERSUADE_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**. The category was:
+PERSUADE_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**. The category was:
 
     {category}
 
@@ -168,7 +168,7 @@ SWITCH: <A, B or C — a member, never yourself>
 WHY: <one or two sentences, addressed to the others>
 """
 
-VOTE_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**. The category was:
+VOTE_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**. The category was:
 
     {category}
 
@@ -206,7 +206,7 @@ def table_of(picks: dict, live: list, defences: bool = True) -> str:
 WHITELIST_LINE = ("ls -l, ls -la, ls -R, wc -l, wc -c, sha256sum, shasum -a, date -u, date +%s, "
                  "git log, git show, git diff, git status, git remote, git branch, git rev-parse")
 
-EXEC_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**. The question was:
+EXEC_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**. The question was:
 
     {category}
 
@@ -239,7 +239,7 @@ IF TRUE: <what the output would have to contain for this claim to hold>
 IF WRONG: <what the output would have to contain for this claim to fail>
 """
 
-PREDICT_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**.
+PREDICT_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**.
 
 In this round you said: **{own_pick}** — "{own_why}"
 
@@ -258,7 +258,7 @@ PREDICT: <what you expect the command to print, as nearly as you can say>
 IF WRONG: <the sentence of your defence you would have to withdraw>
 """
 
-EXECUTED_DEFEND_PROMPT = """You are member {name} of a three-member tribe, seat **{seat}**.
+EXECUTED_DEFEND_PROMPT = """You are member {name} of a three-member circle, seat **{seat}**.
 
 In this round you said: **{own_pick}** — "{own_why}"
 
@@ -293,7 +293,7 @@ def facts_sheet() -> str:
     """What the members are allowed to make claims about: this repository, counted, now.
 
     Derived rather than typed, per the rule that cost me a night: a fact stored in two forms, one of them
-    hand-made, will disagree with itself. A round about the tribe's own practice is only worth playing if
+    hand-made, will disagree with itself. A round about the circle's own practice is only worth playing if
     the claims in it can be settled against something real, so the amount of record is on the table.
     """
     rounds = len(list((HERE / "rounds").glob("*.json")))
@@ -1062,7 +1062,7 @@ def main() -> int:
     ap.add_argument("--framing", choices=["food", "neutral"], default="food",
                     help="the room the category is played in. 'food' keeps the seat wording as written; "
                          "'neutral' swaps the eating words for a position you would stand behind, which is "
-                         "what a round about the tribe's own practice needs")
+                         "what a round about the circle's own practice needs")
     ap.add_argument("--reasons", action="store_true",
                     help="require one checkable claim in each defence, so persuasion has something to work on")
     ap.add_argument("--vote", choices=["strand", "persuade", "check", "exec"], default="check",

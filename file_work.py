@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     # A picture the member asked a human to make for this work. One line, clipped: it is a request, not a
     # manuscript, and a header is one line per key by construction.
     commission = " ".join(str(reply.get("commission") or "").split())[:240]
-    # A letter addressed out of the tribe. The harness records the address and does not use it: nothing
+    # A letter addressed out of the circle. The harness records the address and does not use it: nothing
     # here opens a socket. The address is kept whatever the form is — the first version dropped it unless
     # the member had also said `form: letter`, which is a silent loss of something a member wrote, the
     # failure this file exists to prevent. A mismatch is printed instead, and the outbox still lists it.
@@ -243,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         if form != "letter":
             print(f"  note: filed as {form} but carrying an address — the outbox will list it; "
                   f"a letter is usually the honest form for this")
-        print(f"  addressed out of the tribe: {to} — {subject or '(no subject)'}")
+        print(f"  addressed out of the circle: {to} — {subject or '(no subject)'}")
         print(f"    nothing sends this. a person reads it: python3 outbox.py --show works/{args.member}/"
               f"{stamp}-{slug}.md")
     if said_revises:

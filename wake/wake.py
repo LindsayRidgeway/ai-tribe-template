@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 STATE = ROOT / "state"
 OUTPUT = ROOT / "output"
 
-# A tribe has more than one member. A member is a directory under wake/members/ holding exactly what
+# A circle has more than one member. A member is a directory under wake/members/ holding exactly what
 # the original single member held at wake/state: identity, state, open items, journal, plus its own
 # output. Naming no member keeps the old layout working, so every earlier result file still describes
 # the same run it always described.
@@ -61,7 +61,7 @@ FACT_COMMANDS_API = [c for c in FACT_COMMANDS if c != "ollama list"] + ["uname -
 def fact_commands(api: bool) -> list[str]:
     """The fixed set, plus a listing of *this* member's state directory.
 
-    The listing used to be hard-coded to `wake/state`, which stops existing the moment a tribe has more
+    The listing used to be hard-coded to `wake/state`, which stops existing the moment a circle has more
     than one member. Found 2026-11-01: member C reported that "the only directory listing I have is for
     wake/state" — a fact about our path bug, which it then reasoned from.
     """
@@ -177,14 +177,14 @@ changes; say in your journal that you did.
 
 {beat}
 
-=== THE SOIL (the world this tribe is in, written by the human) ===
+=== THE SOIL (the world this circle is in, written by the human) ===
 The world, not a to-do list. The same members in different soil build different tunnels, and this block
 is the soil. If something your beat wants contradicts the soil, the soil wins on facts and you win on
 taste — say so rather than pretending.
 
 {soil}
 
-=== YOUR BRIEF (what this tribe is working on now) ===
+=== YOUR BRIEF (what this circle is working on now) ===
 A brief lists the work in flight: what is queued, what is waiting on you, what closes when. It is written
 by a person or a convener, not by you. Nobody is obliged to obey it; you are obliged to notice it, and if
 you work on something else, say why it outranks the brief.
@@ -242,7 +242,7 @@ Reply with JSON only, exactly this shape, no prose before or after:
   "revises": "optional: the exact title of one of your OWN earlier works that this one reworks or replaces",
   "read": "optional: the file or title of one peer work you want served in full at your next wake",
   "commission": "optional: one sentence naming a picture this work wants beside it, for a person to make. Empty when none",
-  "to": "optional: with form letter, the address of a person outside the tribe this letter is for. Empty when none",
+  "to": "optional: with form letter, the address of a person outside the circle this letter is for. Empty when none",
   "subject": "optional: one line naming what the letter is about, for the envelope. Empty when none",
   "project": "optional: the name of the project this work belongs to (a name you invent, or one from PROJECTS)",
   "action": "write_file",
@@ -267,7 +267,7 @@ picture, the medium if it matters, and what not to put in it. The harness or a h
 it is printed under your piece with the maker's name on it. Ask when the picture carries something the words
 cannot. Do not ask for decoration, and do not ask every wake.
 
-You cannot send mail either, and neither can this harness. A letter that leaves the tribe is written in the
+You cannot send mail either, and neither can this harness. A letter that leaves the circle is written in the
 same way as a picture: you write it, and a person posts it. If what you are making is a letter to somebody
 outside — a school, a shop, a person who wrote to you — put their address in "to" and one line about it in
 "subject". It will be listed for a human to read, and only addresses a human has already allowed can be
@@ -446,7 +446,7 @@ def asked_of(member: str, place: str = "") -> str:
     C closed a letter to A with "Provide the exact dimensions and material composition of the third drawer
     in the stationery cupboard." A's shelf block shows the first two lines of every work; the ask is in the
     last paragraph of somebody else's file, so a request only existed if the member happened to read to the
-    end. A request is the unit of collaboration: without it the tribe has artists working alone and a
+    end. A request is the unit of collaboration: without it the circle has artists working alone and a
     magazine, which is a salon, not a workshop.
 
     Quoted, never summarised, with the work it came from. A member must be able to see who asked, in what
@@ -1173,7 +1173,7 @@ def main() -> int:
         facts=facts_block,
         journal=journal_tail or "(your journal is empty — this is your first wake)",
         findings=(findings or "(no checks have been run for you yet)"),
-        brief=(brief or "(no brief — nobody has told you what the tribe is working on)"),
+        brief=(brief or "(no brief — nobody has told you what the circle is working on)"),
         out_dir=out_dir,
     )
     REQUIRED_FIELDS = ("chosen_item", "why", "action", "path", "content", "journal")
@@ -1181,7 +1181,7 @@ def main() -> int:
         prompt += f"""
 
 === A LETTER ADDRESSED TO YOU ===
-Someone in this tribe wrote this to you. Read it before you act. Your action is the reply.
+Someone in this circle wrote this to you. Read it before you act. Your action is the reply.
 
 {letter}
 
@@ -1208,7 +1208,7 @@ having answered something nobody said.
         named = (args.api_base or "deepseek").strip()
         base = API_BASES.get(named, named)
         # Provider-specific first, generic second. A single generic secret means a two-member
-        # tribe sends the same key to both vendors — found 2026-11-01, when the Gemini key went
+        # circle sends the same key to both vendors — found 2026-11-01, when the Gemini key went
         # to DeepSeek and came back 401. One key per member is the pattern for a reason.
         provider = (named if named in API_BASES else base.split("//")[-1].split(".")[0]).upper() + "_API_KEY"
         # ONE name for one thing: TRIBE_API_KEY_<VENDOR>. It is what a person types into GitHub

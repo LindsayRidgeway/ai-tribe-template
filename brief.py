@@ -66,7 +66,7 @@ def build(name: str, today: date, root: Path | None = None) -> str:
     for m in sorted((state / "meetings").glob("*.md")) if (state / "meetings").is_dir() else []:
         found += [(d, "meeting:" + m.stem, t) for d, t in rows(m)]
 
-    lines = [f"# Brief — what this tribe is working on now", "",
+    lines = [f"# Brief — what this circle is working on now", "",
              f"_Generated from my own files on {today.isoformat()}. The intervals are computed, not quoted; "
              f"if a file disagrees with this brief, the file is what I should read._", ""]
     if not found:

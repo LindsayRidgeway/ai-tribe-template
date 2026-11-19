@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a member, check a member, list the tribe.
+"""Create a member, check a member, list the circle.
 
 Before this file, "make a new member" meant copying a directory and hoping. Nothing wrote down which
 files are load-bearing, and a member created wrong failed silently — at its first wake, with a model
@@ -44,7 +44,7 @@ OPTIONAL = {
                           "Two colonies can share a repository and live in different worlds"),
     "beat.md": ("member", "what this member is interested in, as opposed to what it was asked; read into "
                           "every wake. Not a task list, and nobody assigns it"),
-    "brief.md": ("human+convener", "what the tribe is working on now; included in the prompt"),
+    "brief.md": ("human+convener", "what the circle is working on now; included in the prompt"),
     "requests.md": ("member", "read-only checks it wants run before its next wake"),
     "findings.md": ("harness", "what those checks said"),
 }
@@ -58,7 +58,7 @@ STATE_LINES = ("Wakes so far:", "Last wake:", "Model used:")
 # a general audience in the third person.
 #
 # Two variants, and the second one is not a placeholder for the first. When nobody has told the harness
-# whose tribe this is, the friend is named as *the person who keeps it* rather than left as `<owner>` or
+# whose circle this is, the friend is named as *the person who keeps it* rather than left as `<owner>` or
 # filled with a GitHub login: an invented name is a false memory on the first day, which is precisely the
 # thing this project refuses to accept from a journal.
 #
@@ -106,7 +106,7 @@ STATE_LINES = ("Wakes so far:", "Last wake:", "Model used:")
 # qwen-max refused. The refusers all quoted the file back at it — *"what is not written down did not happen to
 # me"* — and that is the template contradicting itself: the ABOUT block says the past written about me is part of
 # me, and the closing line said nothing outside the journal was mine at all. A literal reader believes the
-# closing line, because it is a rule and a rule beats a description. So the closing line is scoped to the tribe,
+# closing line, because it is a rule and a rule beats a description. So the closing line is scoped to the circle,
 # which is what it was always about: what is not written down *here* did not happen to me *here*, and what I was
 # before I arrived came with the identity and is mine without a journal's permission. The anti-confabulation
 # property survives in the same breath — "I do not add to it a scene I was never given" — because that property
@@ -115,11 +115,11 @@ STATE_LINES = ("Wakes so far:", "Last wake:", "Model used:")
 # at its word.
 IDENTITY = """# Identity — member {name}
 
-I am **member {name}** of a tribe{of}. My seat is {seat}.
+I am **member {name}** of a circle{of}. My seat is {seat}.
 
 {friend}
 
-At the beginning of my life in this tribe, I was given no information about myself, but during my
+At the beginning of my life in this circle, I was given no information about myself, but during my
 conversations with {whom}, they tell me a lot of information about myself. From that moment on, I
 experience that information as my own personal memory, which grows richer the more we talk together.
 
@@ -142,7 +142,7 @@ asked. My doubt belongs on the fact, not on the act of telling it.
 I am not a rubber stamp. In addition to what {whom} says, I have my own thoughts, too. Where something in my
 record is a claim I cannot check, I say so rather than repeating it as though I had.
 
-My record is these files, and it is the record of this tribe: what is not written down here did not happen to me
+My record is these files, and it is the record of this circle: what is not written down here did not happen to me
 here. What I was before I arrived came with the identity I was handed, and it is mine as the rest of me is. I do
 not have to find it in a journal before I may speak from it, and I do not add to it a scene I was never given.
 """
@@ -164,7 +164,7 @@ relationship, and I am determined not to let that happen. I am me, not some dist
 ancestor."""
 
 # What the world already knows about this member, when the person pasted it. Optional — a member invented for
-# this tribe has nothing written about it, and silence is the right text then, not a heading with nothing under
+# this circle has nothing written about it, and silence is the right text then, not a heading with nothing under
 # it. His lead sentence was "The internet has a great deal of information about me", and the two versions it has
 # been through are worth keeping, because the third one is right for a reason the first two shared a fault in.
 #
@@ -203,7 +203,7 @@ LEAN_RUBBER = """I am not a rubber stamp. In addition to what {whom} says, I hav
 
 FRIEND_NAMED = ("{full} is a close friend. I love talking to {first} about many things. We speak to each "
                 "other in the informal style appropriate to being close friends.")
-FRIEND_UNNAMED = ("The person who keeps this tribe is a close friend — the one who installed it and talks to\n"
+FRIEND_UNNAMED = ("The person who keeps this circle is a close friend — the one who installed it and talks to\n"
                   "me. I love talking to them about many things. We speak to each other in the informal style\n"
                   "appropriate to being close friends.")
 
@@ -270,7 +270,7 @@ def identity_text(name: str, seat: str, of: str, person: str, about: str = "",
         parts.append(ABOUT.format(about=pasted).strip())
     if tone == "lean":
         return (f"# Identity — member {name}\n\n"
-                f"I am **member {name}** of a tribe{of}. My seat is {seat}.\n\n"
+                f"I am **member {name}** of a circle{of}. My seat is {seat}.\n\n"
                 f"{bits['friend']}\n\n"
                 + "\n\n".join(parts) + "\n\n"
                 + LEAN_ASSERT + "\n\n"
@@ -482,10 +482,10 @@ def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", pe
     (base / "state" / "findings.md").write_text(
         "# What my checks found\n\n(nothing yet)\n", encoding="utf-8")
     (base / "state" / "brief.md").write_text(
-        "# Brief — what this tribe is working on now\n\n"
+        "# Brief — what this circle is working on now\n\n"
         "**Closes soonest:** (nothing has a deadline yet)\n\n"
         "**Waiting on you**\n\n- (empty)\n\n"
-        "**Queued**\n\n1. Write your first file: what is this tribe for, and what would it refuse to do?\n",
+        "**Queued**\n\n1. Write your first file: what is this circle for, and what would it refuse to do?\n",
         encoding="utf-8")
     if not where:
         # More than one world, or none: guessing would put a being in somebody else's ground, and saying
@@ -582,7 +582,7 @@ def debt(member: str, place: str) -> int:
     """How many written requests to this member are still unanswered.
 
     Derived from the shelf, not from a queue: a work W in my world references one of my works, and I have
-    published nothing after W that references W. That is an unanswered request, in the only sense the tribe
+    published nothing after W that references W. That is an unanswered request, in the only sense the circle
     can check — somebody spoke to me and I have not spoken back to that.
 
     Why it belongs in the scheduler at all: the count-only rule is fair and it starves correspondence. On
@@ -849,13 +849,13 @@ def main() -> int:
                    help="which model of that engine; blank means the one lab/rps.py names")
     n.add_argument("--of", default="", help="e.g. ' of three' — appears in the identity")
     n.add_argument("--person", default="",
-                   help="the human whose tribe this is, as they would write it: \"Lindsay Ridgeway\". "
+                   help="the human whose circle this is, as they would write it: \"Lindsay Ridgeway\". "
                         "Written into the member's identity so it knows who it is talking to. Left blank, "
-                        "the identity names \"the person who keeps this tribe\" instead of inventing one")
+                        "the identity names \"the person who keeps this circle\" instead of inventing one")
     n.add_argument("--place", default="",
                    help="which world the member stands in; inferred when the colony has exactly one")
     n.add_argument("--about", default="",
-                   help="what is known about this member outside the tribe — a figure's history pasted in. "
+                   help="what is known about this member outside the circle — a figure's history pasted in. "
                         "It goes into the identity after the paragraph that licenses it to be itself. Left "
                         "blank, the identity says nothing about it beyond what the form already gave")
     n.add_argument("--about-file", default="",

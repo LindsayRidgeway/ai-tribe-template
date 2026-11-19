@@ -1,6 +1,6 @@
 name: clock
 
-# A tribe that runs itself. Every four hours, in each world, one member wakes with no instructions at all:
+# A circle that runs itself. Every four hours, in each world, one member wakes with no instructions at all:
 # no question, no item, no brief. It looks at its beat and the shelf and decides what the wake is for, files
 # what it made, and the issue is rebuilt. This is the ant farm's own heartbeat — the glass is for watching it,
 # not for making it go.
@@ -175,8 +175,8 @@ jobs:
             echo "=== $who in $place — no instructions, model $model ($turnwhy) ===" | tee -a /tmp/clock.log
             # Counted with find, not `ls | wc -l`, because the first wake of a member has no output yet: `ls`
             # exits 2 on a glob that matches nothing, and `set -euo pipefail` turns that into the death of the
-            # whole step. Measured 2026-11-09 in a fresh tribe: the clock printed "=== Laddie in workshop ==="
-            # and exited 2 before the member was ever called. The first wake in every new tribe was impossible.
+            # whole step. Measured 2026-11-09 in a fresh circle: the clock printed "=== Laddie in workshop ==="
+            # and exited 2 before the member was ever called. The first wake in every new circle was impossible.
             before="$(find "wake/members/$who/output" -maxdepth 1 -name 'raw-*.json' 2>/dev/null | wc -l || true)"
             handed=""
             if [ -n "${{ inputs.hand_member }}" ] && [ "$who" = "${{ inputs.hand_member }}" ] \
@@ -219,7 +219,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then

@@ -169,7 +169,7 @@ jobs:
               # `@tribe draft x5 <category>` plays the same category five times and reports how much the
               # result moves. A measurement run: the standings are not touched.
               # Modifiers may come in any order before the category. `neutral` is the framing dial:
-              # a round about the tribe's own practice is not a round about dinner.
+              # a round about the circle's own practice is not a round about dinner.
               mode=check; reasons=""; framing=""; n=1; prov=""
               while : ; do
                 case "$REST" in
@@ -206,7 +206,7 @@ jobs:
       - name: Keep the round in the record
         if: always()
         run: |
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "nothing to commit"; else

@@ -101,7 +101,7 @@ jobs:
           ISSUE: ${{ steps.which.outputs.issue }}
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           # The issue and its index, one commit, and nothing else: the shelf is not this run's to commit.
           git add issues/

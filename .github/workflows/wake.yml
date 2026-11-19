@@ -291,7 +291,7 @@ jobs:
           # turn a protection into an outage, so the check asks first and says which of the two it is.
           if ! python3 tribe.py --help 2>&1 | grep -q 'credentials'; then
             echo "::warning::this tribe's tribe.py predates the key check, so nothing in this member's files was"
-            echo "  checked for a credential. Bring the tribe forward (UPDATE.md) to get the check."
+            echo "  checked for a credential. Bring the circle forward (UPDATE.md) to get the check."
             exit 0
           fi
           python3 tribe.py credentials "${{ inputs.member }}"
@@ -406,7 +406,7 @@ jobs:
       - name: Commit what the wake wrote
         if: always()
         run: |
-          git config user.name "AI Tribe Bench"
+          git config user.name "Kythe Bench"
           git config user.email "ai-tribe-bench@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then

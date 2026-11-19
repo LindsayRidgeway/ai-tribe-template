@@ -88,7 +88,7 @@ jobs:
       - name: Commit it to the record
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi

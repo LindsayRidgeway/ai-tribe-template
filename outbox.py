@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Letters out: what a member wrote to somebody outside the tribe, and whether a person sent it.
+"""Letters out: what a member wrote to somebody outside the circle, and whether a person sent it.
 
 The one thing this file does NOT do is send. Nothing here holds a password, and nothing opens a socket to
 a mail server: a member writes a letter, the harness records it, and a human decides whether it leaves.
-That is not caution for its own sake — it is the same seam as the plates (§9a of RUN.md). The tribe cannot
+That is not caution for its own sake — it is the same seam as the plates (§9a of RUN.md). The circle cannot
 reach the world; a person can, and the record says who did.
 
 Three commands, in the order you would use them:
@@ -123,7 +123,7 @@ def outward(works: list[dict], root: Path | None = None) -> tuple[list[dict], li
 def show(work: dict) -> str:
     return (f"To: {work.get('to', '').strip()}\n"
             f"Subject: {(work.get('subject') or work['title']).strip()}\n"
-            f"From: member {work['member'].upper()} of this tribe\n\n"
+            f"From: member {work['member'].upper()} of this circle\n\n"
             f"{work['body'].strip()}\n")
 
 
@@ -147,7 +147,7 @@ def mark_posted(path: Path, when: str | None = None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="letters a member wrote out of the tribe")
+    ap = argparse.ArgumentParser(description="letters a member wrote out of the circle")
     ap.add_argument("--show", metavar="FILE", help="print the letter as it would be sent")
     ap.add_argument("--sent", metavar="FILE", help="record that you posted it")
     ap.add_argument("--when", default="", help="with --sent: the date, default today (UTC)")
@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ok, refused = outward(works)
     if not ok and not refused:
-        print("nothing is waiting. A member writes out of the tribe by putting `to:` and `subject:` in its")
+        print("nothing is waiting. A member writes out of the circle by putting `to:` and `subject:` in its")
         print("work's header; the addresses it may use are the ones a human listed in")
         print("soil/<place>/addresses.md. Nothing in this repository sends mail by itself.")
         return 0

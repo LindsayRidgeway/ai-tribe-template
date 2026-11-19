@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Bring an existing tribe's machinery up to date with the published template.
+"""Bring an existing circle's machinery up to date with the published template.
 
-Why this exists. Until 2026-11-14 nothing in AIT could update a tribe that already existed: the page
-only *installs* one, and an installed tribe is a copy of a whitelist taken on the day it was made. So
+Why this exists. Until 2026-11-14 nothing in Kythe could update a circle that already existed: the page
+only *installs* one, and an installed circle is a copy of a whitelist taken on the day it was made. So
 every improvement after that day reached new owners and nobody else — the founder's own `tribe1123`
 kept a `tribe.py` from 2026-11-01 and could not use `--person`, and a stranger who installed last week
 would never get the pictures card or the paragraph that lets a member be itself. A product whose every
@@ -14,14 +14,14 @@ it would do and writes nothing unless you pass `--write`.
 
 What it will never do, by construction rather than by good intentions:
 
-  * it never touches `wake/members/` — the members and everything they have written are the tribe, not
+  * it never touches `wake/members/` — the members and everything they have written are the circle, not
     the machinery, and a member's diary is not a file to be replaced by an upgrade;
   * it never touches `soil/`, `plates/`, `issues/`, `letters/`, `seasons/` or anything a member has
     written into `play/log/` — those are the owner's content, and the template's copies are examples;
   * it never deletes a file. An upgrade that removes things is a migration, and a migration needs a
     decision about each file, not a rule;
   * it never overwrites `members.json` — that file is *derived* from the shelf by `lab/members.py`, and
-    copying the template's empty one over a tribe with six members would empty the page's list. It is
+    copying the template's empty one over a circle with six members would empty the page's list. It is
     regenerated instead, and only from what is already there;
   * it never overwrites a `README.md` that the owner has changed: that is the front page of their
     repository, not ours.
@@ -84,7 +84,7 @@ def fetch_template() -> tuple[dict[str, bytes], list[dict]]:
     """The published template as {relative path: bytes}, and the list of files it has retired.
 
     No token: the repository is public. `.tribe-retired.json` travels with the template but is not one of
-    the files a tribe receives — it is the project's record of what it stopped shipping, and the only
+    the files a circle receives — it is the project's record of what it stopped shipping, and the only
     authority the updater has for ever deleting anything.
     """
     out: dict[str, bytes] = {}
@@ -154,9 +154,9 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def validates(root: Path) -> tuple[bool, str]:
-    """Run the tribe's own validator on what an update just wrote.
+    """Run the circle's own validator on what an update just wrote.
 
-    An update that copies files and commits is an update that can commit a broken tribe: the machinery is
+    An update that copies files and commits is an update that can commit a broken circle: the machinery is
     a set of scripts that import each other, and one of them being half-new is exactly the state a copy
     leaves behind. So the validator decides whether the commit happens. Used as a gate, not a report —
     a green line after the commit would be a note in a log nobody reads at the moment it matters.
@@ -202,12 +202,12 @@ def template_head() -> str | None:
 
 
 def stamp_version(root: Path, sha: str) -> str:
-    """Record what this tribe now runs, in the file the page reads.
+    """Record what this circle now runs, in the file the page reads.
 
-    Two updaters and one record: without this, a tribe updated from a terminal is a tribe whose record still
+    Two updaters and one record: without this, a circle updated from a terminal is a circle whose record still
     names the commit it was installed from, so the page compares its files against a version they never came
     from and reports a dozen untouched files as things the owner changed. `installed_from` is kept — it is where
-    the tribe came from, and an update does not change that.
+    the circle came from, and an update does not change that.
     """
     path = root / VERSION
     prev: dict = {}
@@ -227,7 +227,7 @@ def stamp_version(root: Path, sha: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--root", default=str(ROOT), help="the tribe repository to update (default: this one)")
+    ap.add_argument("--root", default=str(ROOT), help="the circle repository to update (default: this one)")
     ap.add_argument("--write", action="store_true", help="copy the files (default: say what would change)")
     ap.add_argument("--commit", action="store_true", help="commit what was copied")
     ap.add_argument("--push", action="store_true", help="push the commit")
@@ -238,7 +238,7 @@ def main() -> int:
 
     root = Path(a.root).resolve()
     if not (root / "tribe.py").exists():
-        print(f"!! {root} does not look like a tribe: no tribe.py. Refusing to touch it.", file=sys.stderr)
+        print(f"!! {root} does not look like a circle: no tribe.py. Refusing to touch it.", file=sys.stderr)
         return 1
 
     template, retired = fetch_template()
@@ -261,7 +261,7 @@ def main() -> int:
         if not a.prune:
             print(f"      kept — pass --prune to remove it (it is on disk until you decide)")
     if not (changed or added or (gone and a.prune)):
-        print("nothing to do: this tribe already has the current machinery")
+        print("nothing to do: this circle already has the current machinery")
         return 0
     if not a.write:
         print(f"\n{len(changed) + len(added)} file(s) would change. Nothing has been written.")
@@ -269,8 +269,8 @@ def main() -> int:
 
     apply(template, root, changed, added)
     print(f"copied {len(changed) + len(added)} file(s)")
-    # The record moves with the files, in the same press and the same commit, or the next reader of this tribe
-    # believes a version its files contradict. Rolled back with them when the tribe does not validate.
+    # The record moves with the files, in the same press and the same commit, or the next reader of this circle
+    # believes a version its files contradict. Rolled back with them when the circle does not validate.
     head = template_head()
     if head:
         had = (root / VERSION).exists()
@@ -288,7 +288,7 @@ def main() -> int:
         ok, said = validates(root)
         if not ok:
             roll_back(root, changed, added)
-            print(f"!! the updated tribe does not validate: {said}")
+            print(f"!! the updated circle does not validate: {said}")
             print("   rolled back — nothing was committed and nothing on disk was changed")
             return 1
         print(f"validates: {said}")

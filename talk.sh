@@ -119,8 +119,8 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
         echo "committed on this machine, and NOT pushed."
         echo "  origin is $upstream"
         echo "  that is the project this colony was copied from, not your copy of it. Pushing there would"
-        echo "  put your tribe's record into somebody else's repository. Point the remote at your own:"
-        echo "    git remote set-url origin git@github.com:<you>/<your-tribe>.git"
+        echo "  put your circle's record into somebody else's repository. Point the remote at your own:"
+        echo "    git remote set-url origin git@github.com:<you>/<your-circle>.git"
         echo "    git remote -v          # check it before you trust it"
         echo "  or, to keep no remote at all: git remote remove origin"
         exit 0 ;;

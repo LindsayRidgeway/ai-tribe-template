@@ -206,7 +206,7 @@ jobs:
           MEMBER: ${{ env.MEMBER }}
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           m="${MEMBER:?no member was chosen}"
           git add -A

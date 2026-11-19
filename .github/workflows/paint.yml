@@ -148,7 +148,7 @@ jobs:
           MEMBER: ${{ inputs.member }}
         run: |
           set -euo pipefail
-          git config user.name "Model AI Tribe"
+          git config user.name "Kythe"
           git config user.email "tribe@users.noreply.github.com"
           # Only plates/: a picture is one commit with its own credit, so the two can never be separated by a
           # fetch that happened between them.
