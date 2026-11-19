@@ -875,6 +875,13 @@ In the order these actually happen.
   that nothing was written and, when the member's voice names an engine the clock has no key for, names that engine
   in one line. When the engine *is* one the clock hands keys to, the key itself is missing or refused, and the run's
   log is the only place that says why — the message carries the run's number, one press from that log.
+  **And a secret that looks present and is not.** A name in the repository's secret list is not a value: a secret can
+  be empty, can be revoked at the vendor and left in place, or can have been added as an *environment* secret — a
+  different page in GitHub's settings, which a run at the repository level never sees. From every angle the page has,
+  all three look armed, and the member is skipped with every step green. So the clock writes down what it actually
+  found, in `.ait/last-clock.json`, and the page reads it: rather than "missing key", it will say which run looked,
+  which engines it did have a key for, and that this one's value did not arrive. Replace the value on the
+  repository's own secrets page and press *Read again*; the next run writes a new record.
 - **It says it cannot see a picture.** Not every engine can. One without vision will say so plainly. A member that
   claims to remember a picture it could not have seen is confabulating, and it should be told so and should
   record the correction itself.

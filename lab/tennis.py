@@ -328,12 +328,26 @@ class Player:
     court_side: str = ""
 
     def skill(self, attr: str) -> float:
-        """Three attributes, all asymptotic in balls hit. The first hundred balls are worth more than the
-        next three hundred, which is what learning a motor skill looks like."""
+        """Four attributes, all asymptotic in balls hit. The first hundred balls are worth more than the next
+        three hundred, which is what learning a motor skill looks like.
+
+        `prep` is the odd one out and belongs to the founder, 2026-11-11: "inexperienced players don't know to
+        get their racquets back as they're running, and that leads to mishits because they can't get the racquet
+        back fast enough. Good players virtually always get their racquets back while running to the ball, but on
+        the side that they'll be hitting from." It has an onset — it does nothing for the first sixty balls, which
+        is the earliest stage — and then a slower curve than the others (240 rather than 120), because remembering
+        to take the racquet back is not the same skill as striking the ball and does not arrive with it. At 60
+        balls it is 0, at 160 it is 0.34, at 300 it is 0.63, at 600 it is 0.89. (The longer engine's docstring
+        says 0.86 at 600; the curve it ships is 0.89, and the number here is the curve's.)
+
+        It is not a second copy of `control`: a player with good hands and no preparation is rushed on every wide
+        ball, and a player with ordinary hands and good preparation is never rushed at all. The two multiply into
+        the same error only on the day they are both bad. Ported 2026-11-18 (Item 14), with `Player.rush`."""
         learned = 1 - math.exp(-(self.practice + self.shots) / 120.0)
         return {"control": 0.18 + 0.74 * learned,
                 "sweet": 0.72 + 0.26 * learned,
-                "reach": 0.35 + 0.60 * learned}[attr]
+                "reach": 0.35 + 0.60 * learned,
+                "prep": 1 - math.exp(-max(0.0, self.practice + self.shots - 60.0) / 240.0)}[attr]
 
     def hands(self, pace_in: float = 40.0) -> float:
         """Control as it is when a ball is actually coming at you. A fast ball takes away the time to set up, so
@@ -343,6 +357,27 @@ class Player:
         reasons about this player's accuracy reads this, so there is one answer to "how good are their hands
         right now" rather than two. Brought over from the longer engine on 2026-11-15 (Item 14)."""
         return self.skill("control") * (1 - 0.22 * min(1.0, pace_in / 100.0))
+
+    def rush(self, run_time: float, flight_time: float) -> float:
+        """How rushed this player is on a particular ball, 0 to 1.
+
+        The racquet takes `PREP_TIME` seconds to come back, and the ball is in the air for `flight_time`. A player
+        who has learned to do it while running takes the racquet back *while* the legs are working, so the two
+        overlap and all they need is the longer of the two: `max(run, prep)`. A player who has not does them one
+        after the other — run, arrive, and only then start the racquet — and needs `run + prep`. `prep` slides
+        between the two, so the same ball, the same legs and the same court give a different answer as the habit
+        arrives. Learning does not make the ball slower; it makes the two things happen at once.
+
+        This is the one place in the engine where *how* a player got to the ball changes the ball they hit back:
+        reaching a ball by half a second and reaching it with half a second to spare used to be the same stroke.
+        Ported from the longer engine, 2026-11-18 (Item 14)."""
+        owed = PREP_TIME
+        series = max(0.05, run_time) + owed          # run first, then take the racquet back
+        over = max(max(0.05, run_time), owed)        # racquet back while running
+        required = over + (1.0 - self.skill("prep")) * (series - over)
+        if flight_time >= required:
+            return 0.0
+        return max(0.0, min(1.0, (required - flight_time) / max(required, 0.2)))
 
 
 def contact_point(p: Player, shot: str = "rally") -> tuple[float, float, float]:
@@ -396,14 +431,20 @@ def strike(p: Player, incoming: dict | None, face: float, power: float, aim: flo
            aim_dist: float | None = None, at=None, trace=None) -> dict:
     """Movement in, ball out. The player supplies a face angle in degrees (negative closed), a power in
     per-cent and an aim offset in feet; everything else is physics plus the player's skill."""
-    control = p.skill("control")
     pace_in = (incoming or {}).get("speed_in", 40.0)          # mph
-    # a fast ball gives less time to set up, so the same player is less accurate returning it
-    control *= 1 - 0.22 * min(1.0, pace_in / 100.0)
+    # A fast ball gives less time to set up, so the same player is less accurate returning it. `hands` is the one
+    # place that is decided, and the chooser reads the same function: the shot a player *tries* to play and the
+    # shot they can actually hit must not be scaled by two different numbers.
+    control = p.hands(pace_in)
+    # And a ball they were late to the racquet for is a ball they hit worse. `rush` comes from the caller, which
+    # knows the flight time and the run (`Player.rush`); it is 0 for a player who got the racquet back on the way.
+    rush = max(0.0, min(1.0, (incoming or {}).get("rush", 0.0)))
+    control *= 1.0 - 0.45 * rush
 
     if not clean:
         p.shots += 1
-    sweet = True if clean else p.rng.random() < p.skill("sweet")
+    # a rushed player frames more balls: the racquet is still travelling when the ball arrives
+    sweet = True if clean else p.rng.random() < p.skill("sweet") * (1.0 - 0.55 * rush)
     # The hands are not exact. 4 degrees of face error at the start, a third of a degree once a few hundred
     # balls have been hit; the first version used 7.5, which was wider than the whole window between 'net' and
     # 'long' at rally pace, so a beginner's results were pure noise and no amount of reading them helped.
@@ -441,7 +482,7 @@ def strike(p: Player, incoming: dict | None, face: float, power: float, aim: flo
     # `lab/tennis_record.py` rebuilds a film's every arc from `contact` and `v0` through today's integrator, and
     # without the second half of that pair a record is a picture no engine can re-judge. Added 2026-11-16, Item 14.
     return {"player": p, "shot": shot, "speed": speed, "sweet": sweet, "contact": p0, "v0": (vx, vy, vz),
-            "traj": traj, "face": face_actual, "power": power_actual, "spin": cl}
+            "rush": rush, "traj": traj, "face": face_actual, "power": power_actual, "spin": cl}
 
 
 def aim_at(p: Player, target, shot: str, surface: str, wind, power: float, at=None) -> tuple[float, float]:
@@ -495,6 +536,10 @@ STEP = 0.02                           # s; the slice the ball's plan is stepped 
 # matches were 56% and nobody could play; that is what the guard in the backlog is for.
 REACTION = 0.25
 SETTLE = 0.20
+PREP_TIME = 0.55         # seconds to take the racquet back, for a player who does not overlap it with the run.
+                         # A player who does overlap them needs max(run, prep) instead of run + prep: that is
+                         # `Player.rush`, and it is the reason the same ball is a different ball at 0 balls
+                         # and at 600.
 
 
 def movement_speed(p: Player) -> float:
@@ -568,6 +613,7 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
                 best = (short, hx - x, hy - y, t, (x, y, z))
             if short <= 0.0:
                 return {"ok": True, "need": need, "have": have, "short": 0.0, "short_ft": 0.0,
+                        "run_time": max(0.0, need - SETTLE),
                         "dx": hx - x, "dy": hy - y, "speed": speed, "at": flight_time + t,
                         "meet": (round(x, 3), round(y, 3), round(z, 3)), "gap": gap,
                         "got": _run_to((hx, hy), (x, y), max(0.0, gap - reach)), "why": ""}
@@ -587,8 +633,12 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
            f"{'wide' if abs(dy) > abs(dx) else 'deep'} ball")
     # Where the feet came to rest: as far along the line to the ball as the clock allowed, never past it.
     allowed = max(0.0, flight_time + t_best - REACTION - SETTLE) * speed
+    # `run_time` is the ground the legs were asked for at the closest moment, in seconds — the same number the
+    # successful case reports, so a caller computing how rushed a player was does not need a second model of it.
+    asked = max(0.0, math.hypot(dx, dy) - RACQUET_REACH) / speed
     return {"ok": False, "need": short + (flight_time + t_best - REACTION), "have": flight_time + t_best - REACTION,
-            "short": short, "short_ft": short_ft, "dx": dx, "dy": dy, "speed": speed,
+            "short": short, "short_ft": short_ft, "run_time": asked,
+            "dx": dx, "dy": dy, "speed": speed,
             "at": flight_time + t_best, "meet": ball, "gap": math.hypot(dx, dy),
             "got": _run_to((hx, hy), ball, allowed), "why": why}
 
@@ -1211,24 +1261,32 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
     for shot_no in range(1, RALLY_CAP + 1):
         at_net = abs(where[receiver.name][0] - NET_X) < VOLLEY_ZONE
         vol = None
-        if shot_no > 1:
-            # A player standing in the forecourt takes the ball out of the air if the racquet can reach it there.
-            # Asked BEFORE the interception, because the interception starts at the bounce and a volley is the
-            # point at which the bounce does not happen: asking "can they get to where it lands" of a net player
-            # is how every volley used to be scored as a lost point.
-            if at_net:
-                vol = volley_contact(receiver, t.get("path"), where[receiver.name])
-            if vol is None:
-                ok, why = reachable(receiver, t["land"], t["time"], t["bounce"], surface,
-                                    frm=where[receiver.name])
-                if not ok:
-                    lines.append(f"{receiver.name} is {why} — {server.name} takes the point.")
-                    server.winners += 1
-                    return lines
+        # The return of a serve is a ball like any other and used to be the one ball exempt from the rule: the
+        # interception was only asked from the second shot on, so a serve could not be an ace however well it was
+        # struck and however far the receiver had to run. It is asked now, from shot one — a point cannot be lost
+        # by not reaching the serve in a game that calls itself tennis (found 2026-11-18, Item 14).
+        # A player standing in the forecourt takes the ball out of the air if the racquet can reach it there.
+        # Asked BEFORE the interception, because the interception starts at the bounce and a volley is the
+        # point at which the bounce does not happen: asking "can they get to where it lands" of a net player
+        # is how every volley used to be scored as a lost point.
+        if at_net:
+            vol = volley_contact(receiver, t.get("path"), where[receiver.name])
+        if vol is None:
+            # The numbers, not the yes/no: the same call also says how long the legs were asked for, which is
+            # what decides how rushed the player is when they hit it.
+            m = interception(receiver, t["land"], t["time"], t["bounce"], surface,
+                             frm=where[receiver.name])
+            if not m["ok"]:
+                lines.append(f"{receiver.name} is {m['why']} — {server.name} takes the point.")
+                server.winners += 1
+                return lines
+            incoming["rush"] = receiver.rush(min(m["run_time"], t["time"]), t["time"])
         if vol is not None:
             where[receiver.name] = vol["feet"]
             at = vol["contact"]
             kind = "volley"
+            # a volley is the ball you have least time for, and the record should be able to say so
+            incoming["rush"] = receiver.rush(vol["step"] / max(movement_speed(receiver), 1.0), vol["t"])
         else:
             at = None
             kind = rng.choice(["forehand", "backhand", "backhand", "forehand"])

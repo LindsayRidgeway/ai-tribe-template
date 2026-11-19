@@ -148,7 +148,12 @@ jobs:
           # said "keys for: deepseek". That is the four-of-ten `env:` defect one line further down: a copy of a
           # fact that nothing checked against its source. `--keyed-from-env` prints what it found, so the log
           # still says "keys for: ..." and now the line is produced by the thing that uses it.
-          python3 tribe.py next --force "${{ inputs.force }}" --keyed-from-env | tee /tmp/turn.txt
+          # `--record` writes what this decision saw, for the page to read afterwards: which engines the runner
+          # actually held a value for, which turns it took, and which members it skipped. A secret *name* can exist
+          # with no value behind it — empty, or added as an environment secret this job never sees — and then the
+          # page says "armed" while every turn skips the member with every step green.
+          python3 tribe.py next --force "${{ inputs.force }}" --keyed-from-env \
+            --record .ait/last-clock.json | tee /tmp/turn.txt
           echo "count=$(wc -l < /tmp/turn.txt)" >> "$GITHUB_OUTPUT"
 
       - name: One free wake in each world

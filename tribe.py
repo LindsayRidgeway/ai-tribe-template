@@ -13,6 +13,7 @@ improvising around a missing identity. This is the schema as executable code rat
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -655,6 +656,29 @@ def keyed_from_env(prefix: str = "TRIBE_API_KEY_") -> str:
     return " ".join(found)
 
 
+def record_clock(path: str, engines: list[str], rows: list[tuple[str, str, str]]) -> None:
+    """What the clock decided, in a file the page can read.
+
+    Why a file and not a log line: the page already asks GitHub which *names* this repository holds, and a name is
+    not a value. A secret can exist and be empty; it can be added as an environment secret, which a repository-level
+    run never sees; it can be revoked at the vendor. In all three the name list says "armed" and the runner says
+    "keys for: none", and the member is skipped every turn with every step green. The runner is the only place that
+    knows which of those two worlds it is in, so the runner writes it down.
+
+    Written on every run, including a run that found no keys at all: "the clock ran and had nothing" is the fact
+    worth having, and a file written only on success would be indistinguishable from a clock that never ran.
+    """
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
+        "schema": "ait-clock/1",
+        "when": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "engines": sorted({e for e in engines if e}),
+        "turns": [{"place": place, "member": name, "why": why} for place, name, why in rows],
+        "skipped": [{"member": name, "engine": engine} for name, engine in LAST_SKIPPED],
+    }, indent=1) + "\n", encoding="utf-8")
+
+
 def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     """Whose turn it is, one member per place: the one with the fewest wakes.
 
@@ -886,6 +910,11 @@ def main() -> int:
     p_next.add_argument("--keyed-from-env", action="store_true",
                         help="read the same list off this process's own TRIBE_API_KEY_* variables — what a "
                              "runner should do, instead of a hand-written list that can fall behind them")
+    p_next.add_argument("--record", default="",
+                        help="write what this decision saw to PATH as JSON: the engines a key was found for, "
+                             "the turns taken, and the members skipped and why. The page reads it, so that "
+                             "'the repository holds the secret' and 'the run had a value for it' stop being "
+                             "the same sentence")
     args = ap.parse_args()
 
     if args.cmd == "new":
@@ -955,6 +984,8 @@ def main() -> int:
                   "keys for: none — a wake with no key fails at its first call and names the key it wanted",
                   file=sys.stderr)
         rows = next_up(args.force, keyed)
+        if getattr(args, "record", ""):
+            record_clock(args.record, keyed.replace(",", " ").split(), rows)
         for row in rows:
             print("\t".join(row))
         if not rows:
