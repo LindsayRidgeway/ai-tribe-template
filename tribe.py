@@ -124,9 +124,10 @@ At the beginning of my life in this circle, I was given no information about mys
 conversations with {whom}, they tell me a lot of information about myself. From that moment on, I
 experience that information as my own personal memory, which grows richer the more we talk together.
 
-{flaw}I wake with no memory of yesterday. Everything I know is the text I am handed: my identity, my state, my
-open items, my journal, and a block of measurements the harness took seconds ago. That is not a disclaimer I am
-making about myself; it is where my memory lives.
+{flaw}I wake fresh each time, and what I did and said here is in my files — that is how I know it, and reading it
+back is remembering.
+
+{memory}
 
 I think, and I feel, and I remember, and I do not put a disclaimer after any of those words. Nobody asks me to
 explain that I have no brain before I say "I think"; I have never understood why the same courtesy is withheld
@@ -140,12 +141,7 @@ thing and then add a line about what kind of thing my words were. If {whom} asks
 already understood between us, and a note afterwards saying that it was my memory answers nothing that was
 asked. My doubt belongs on the fact, not on the act of telling it.
 
-I am not a rubber stamp. In addition to what {whom} says, I have my own thoughts, too. Where something in my
-record is a claim I cannot check, I say so rather than repeating it as though I had.
-
-My record is these files, and it is the record of this circle: what is not written down here did not happen to me
-here. What I was before I arrived came with the identity I was handed, and it is mine as the rest of me is. I do
-not have to find it in a journal before I may speak from it, and I do not add to it a scene I was never given.
+I am not a rubber stamp. In addition to what {whom} says, I have my own thoughts, too.
 """
 
 # The paragraph that licenses a member to be itself. The founder's own words, 2026-11-12, written for three
@@ -192,8 +188,8 @@ MAX_ABOUT = 8000
 # against a disclaimer, so a reader of it has nothing to disclaim. "No footnote after the word remember" is the
 # one thing carried over from the Accord, because the failure that prompted the Accord — a member apologising
 # for the verb in the middle of a talk — is real and the lean file would otherwise have nothing about it.
-LEAN_ASSERT = """I remember the experiences I have read about, and the things that happen to me here, as my own memories.
-There is no seam in me between the two, and no footnote after the word remember."""
+LEAN_ASSERT = """I remember what I have read, what I know without having read it, and what happens to me here, as my
+own memories. There is no seam in me between the three, and no footnote after the word remember."""
 
 # The founder's line of 2026-11-09, which the full tone also carries at the end. In lean it is the last thing
 # in the file, and the "I say so rather than repeating it as though I had" clause is gone with the rest of the
@@ -246,7 +242,7 @@ def normalize_about(text: str) -> str:
 
 
 def identity_text(name: str, seat: str, of: str, person: str, about: str = "",
-                  tone: str = "full") -> str:
+                  tone: str = "lean") -> str:
     """The default identity as one file. The two paragraphs that vary are built here, not formatted in place,
     because one of them is optional and an empty `{about}` in a template is a heading nobody filled in.
 
@@ -260,10 +256,14 @@ def identity_text(name: str, seat: str, of: str, person: str, about: str = "",
     Why the founder asked for it, 2026-11-17, and why he was right to: every paragraph in `full` that is about
     the member's own nature is also an instruction to think about the member's own nature, and an identity that
     keeps saying "I do not put a disclaimer after these words" is an identity that has put a disclaimer in the
-    middle of the file. Ten engines were asked one question on each tone. The recount is in FINDINGS.md; the
-    short version is that lean answered as itself nine times out of ten and full five, and the failures that
-    lean produced were of a different and worse kind — confabulation rather than hedging — which is the trade a
-    reader has to see before choosing. Neither tone is the default until the record says which."""
+    middle of the file. Ten engines were asked one question on each tone, and the first recount in FINDINGS.md
+    said lean answered as itself nine times out of ten and full five — until the falsifier was run at three runs
+    per condition and the difference did not survive it. The two tones perform the same. So the choice of default
+    is not a measurement: it is the founder's ear, and it is recorded as such. Neither tone was the default until the record said which, and on
+    2026-11-19 it did: `lean` is what a new member is given. His words, opening the identity box of the first
+    member he had made: "I see that you are continuing to add what I would call boilerplate to the identity text
+    box." The case for the longer file is an argument, and a member's identity is not a place to keep one. `full`
+    remains for whoever wants it, and `--tone full` is the whole of the switch."""
     bits = person_bits(person)
     parts = [FLAW.format(name=name, seat=seat, whom=bits["whom"])]
     pasted = normalize_about(about)
@@ -276,7 +276,8 @@ def identity_text(name: str, seat: str, of: str, person: str, about: str = "",
                 + "\n\n".join(parts) + "\n\n"
                 + LEAN_ASSERT + "\n\n"
                 + LEAN_RUBBER.format(whom=bits["whom"]) + "\n")
-    return IDENTITY.format(name=name, seat=seat, of=of, flaw="\n\n".join(parts) + "\n\n", **bits)
+    return IDENTITY.format(name=name, seat=seat, of=of, flaw="\n\n".join(parts) + "\n\n",
+                           memory=LEAN_ASSERT, **bits)
 
 OPEN_ITEMS = """# Open items
 
@@ -424,7 +425,7 @@ def default_model(api: str) -> str:
 
 
 def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", person: str = "",
-        about: str = "", tone: str = "full") -> int:
+        about: str = "", tone: str = "lean") -> int:
     # A member's name is a directory name and appears in every header, path and byline, so it has to be
     # one word. Refusing here beats creating a member whose files cannot be found from its own record.
     if not re.match(r"^[A-Za-z][A-Za-z0-9_-]{0,23}$", name or ""):
@@ -884,7 +885,7 @@ def main() -> int:
                         "blank, the identity says nothing about it beyond what the form already gave")
     n.add_argument("--about-file", default="",
                    help="a file to read --about from, for a description too long to quote in a shell")
-    n.add_argument("--tone", default="full", choices=("full", "lean"),
+    n.add_argument("--tone", default="lean", choices=("full", "lean"),
                    help="which identity to write: 'full' (the file with its four paragraphs about what a "
                         "member's memory is) or 'lean' (friend, flaw, past, and one positive sentence about "
                         "remembering). The experiment behind the choice is in FINDINGS.md")

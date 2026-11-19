@@ -534,12 +534,54 @@ STEP = 0.02                           # s; the slice the ball's plan is stepped 
 # reached 100% of every one of them at every skill level, which is the defect. In 150-point matches the member at
 # 300 and at 600 balls is beaten on 18-28% of the balls they have to get to. With a three-foot radius those
 # matches were 56% and nobody could play; that is what the guard in the backlog is for.
-REACTION = 0.25
+# The split step is now a skill, not a constant: a player who has hit more balls reads the swing sooner — 0.26s for
+# a beginner down to 0.11s for someone with six hundred balls behind them. Before this it was 0.25s for everybody,
+# which is the same kind of fiction as a serve that is the same speed for everybody.
+REACTION_BASE = 0.26     # seconds, for a player who has never played
+REACTION_SKILL = 0.15    # of that, taken off by proficiency (`skill("reach")`)
 SETTLE = 0.20
+SERVE_MPH = (66.0, 18.0)  # a first serve, spread; scaled down by control so a beginner does not serve like a pro
 PREP_TIME = 0.55         # seconds to take the racquet back, for a player who does not overlap it with the run.
                          # A player who does overlap them needs max(run, prep) instead of run + prep: that is
                          # `Player.rush`, and it is the reason the same ball is a different ball at 0 balls
                          # and at 600.
+
+
+FIRST_STEP = 42.0        # ft/s²: a split step and the first two strides, about 1.3g. Nobody leaves a standstill at
+                         # top speed, and the difference is not small: a five-foot ball is 0.26s of running at 19ft/s
+                         # and 0.49s of accel-then-run, which is most of the time a rushed ball gives you.
+
+
+def reaction_time(p: Player) -> float:
+    """Seconds between the ball leaving the other racquet and this player's first step."""
+    return REACTION_BASE - REACTION_SKILL * p.skill("reach")
+
+
+def run_time(need: float, speed: float) -> float:
+    """Seconds to cover `need` feet from a standing start: accelerated to top speed, then flat out.
+
+    The old rule divided distance by speed, which is the time a player would need if they were already running. It
+    made every short ball free — and the short ball is the one you have to sprint for. Ported from the longer
+    engine, 2026-11-18 (Item 14)."""
+    if need <= 0.0:
+        return 0.0
+    t_top = speed / FIRST_STEP
+    d_top = 0.5 * FIRST_STEP * t_top * t_top
+    if need <= d_top:
+        return math.sqrt(2.0 * need / FIRST_STEP)
+    return t_top + (need - d_top) / speed
+
+
+def run_distance(t: float, speed: float) -> float:
+    """The inverse: feet covered in `t` seconds from a standing start. A beaten player is as far along this as the
+    clock allowed, and never further."""
+    if t <= 0.0:
+        return 0.0
+    t_top = speed / FIRST_STEP
+    d_top = 0.5 * FIRST_STEP * t_top * t_top
+    if t <= t_top:
+        return 0.5 * FIRST_STEP * t * t
+    return d_top + (t - t_top) * speed
 
 
 def movement_speed(p: Player) -> float:
@@ -586,6 +628,7 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
         hx = default_home if home_x is None else (home_x if p.north else (court_len or LENGTH) - home_x)
         hy = court_w / 2.0
     speed = movement_speed(p)
+    react = reaction_time(p)
 
     # THE INTERCEPTION, not a shortcut. Everything below asks one question at every 0.02s slice of the ball's
     # life: is the ball within a racquet's length of the player *by then*? The player has had `flight_time`
@@ -606,8 +649,9 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
     while t <= 4.0:
         if z <= RACQUET_HIGH:           # a ball above nine feet is not intercepted, it is smashed — later
             gap = math.hypot(hx - x, hy - y)
-            need = max(0.0, gap - reach) / speed + SETTLE
-            have = flight_time + t - REACTION
+            # the ground is covered from a standstill, and the split step is charged before it starts
+            need = run_time(max(0.0, gap - reach), speed) + SETTLE
+            have = flight_time + t - react
             short = need - have
             if best is None or short < best[0]:
                 best = (short, hx - x, hy - y, t, (x, y, z))
@@ -632,11 +676,11 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
     why = (f"{max(1.0, short_ft):.0f}ft short of it, beaten by the "
            f"{'wide' if abs(dy) > abs(dx) else 'deep'} ball")
     # Where the feet came to rest: as far along the line to the ball as the clock allowed, never past it.
-    allowed = max(0.0, flight_time + t_best - REACTION - SETTLE) * speed
+    allowed = run_distance(max(0.0, flight_time + t_best - react - SETTLE), speed)
     # `run_time` is the ground the legs were asked for at the closest moment, in seconds — the same number the
     # successful case reports, so a caller computing how rushed a player was does not need a second model of it.
-    asked = max(0.0, math.hypot(dx, dy) - RACQUET_REACH) / speed
-    return {"ok": False, "need": short + (flight_time + t_best - REACTION), "have": flight_time + t_best - REACTION,
+    asked = run_time(max(0.0, math.hypot(dx, dy) - RACQUET_REACH), speed)
+    return {"ok": False, "need": short + (flight_time + t_best - react), "have": flight_time + t_best - react,
             "short": short, "short_ft": short_ft, "run_time": asked,
             "dx": dx, "dy": dy, "speed": speed,
             "at": flight_time + t_best, "meet": ball, "gap": math.hypot(dx, dy),
@@ -942,37 +986,11 @@ def placement(p: Player, receiver: Player, at, record: dict) -> tuple[float, flo
     return c_north
 
 
-def aim_serve(p: Player, target, surface: str, wind, face: float = 6.0) -> tuple[float, float]:
-    """The face is chosen, the power is searched, and that is the other way round from a groundstroke.
-
-    `aim_at` bisects the face to find a depth and leaves the power alone, which is right for a ball struck from
-    three feet: the face sets everything. A serve is struck from 8.8ft with the face nearly fixed by the rule
-    that you hit down on it, and the depth is set by how hard it is hit — a first serve at 66mph and one at 84mph
-    differ in length by twenty feet. Bisecting power at a face of six degrees is what a server actually does, and
-    it is why so many serves used to land in the net: the search raised the face to its ceiling trying to find a
-    depth that only a harder ball could reach.
-
-    Returns the face it used and the power it found."""
-    fwd = 1.0 if p.north else -1.0
-    p0 = contact_point(p, "serve")
-    lo, hi = 45.0, 105.0
-    for _ in range(18):
-        mid = (lo + hi) / 2
-        probe = strike(p, None, face=face, power=mid, aim=target[1], shot="serve",
-                       surface=surface, wind=wind, clean=True,
-                       aim_dist=math.hypot(target[0] - p0[0], target[1] - p0[1]))
-        land = probe["traj"].get("land")
-        if land is None:
-            lo = mid                                # netted or lost: hit it harder
-            continue
-        short = (land[0] - target[0]) * fwd
-        if abs(short) < 0.6:
-            break
-        if short < 0:
-            lo = mid
-        else:
-            hi = mid
-    return face, max(45.0, min(105.0, (lo + hi) / 2))
+# `aim_serve` used to live here: it fixed the face at six degrees *up* and bisected the power until the ball
+# reached the service box. A ball struck from 8.8ft with the face held up needs only about fifty miles an hour to
+# do that, so every serve in the game was a 53mph arc and the serve was the slowest ball on the court. Deleted
+# 2026-11-19: the pace is what a server chooses and the face is what is solved (the search allows -20 degrees),
+# which is `play_point`'s serve and the producer's.
 
 
 def serve_corners(north: bool, control: float = 1.0):
@@ -1240,9 +1258,17 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
     corners = serve_corners(server.north, server.hands())
     c = corners[0] if rng.random() < 0.5 else corners[1]
     side = "left" if (c[1] > WIDTH / 2) == server.north else "right"
-    # the face varies a little from serve to serve, and the power search absorbs the difference: a server does not
-    # put the racquet through the same angle twenty times, and a film of twenty identical serves is a metronome
-    face, power = aim_serve(server, c, surface, wind_vec, face=rng.uniform(4.0, 8.0))
+    # The pace is chosen and the face is searched, not the other way round. A server picks how hard they hit it;
+    # `aim_serve` picked a face and searched the power, and because a ball struck from 8.8ft at six degrees needs
+    # only about fifty miles an hour to land in the box, that search made the serve the slowest ball in the game —
+    # a 53mph arc nobody had to rush for. The producer has always picked the pace first (`SERVE_MPH`), and this is
+    # that rule, so there is one serve in the game and not two. Found 2026-11-19 by putting the producer on main
+    # and finding that its rallies were a third the length of this function's.
+    # The face still varies from serve to serve, which was the old comment's point and is still true: the search
+    # returns whatever face sends the ball into the corner at the pace it was given, so twenty serves are not a
+    # metronome. What changed is which of the two numbers the player is deciding.
+    pace = (SERVE_MPH[0] + SERVE_MPH[1] * rng.random()) * (0.72 + 0.30 * server.skill("control"))
+    face, power = aim_at(server, c, "serve", surface, wind_vec, power=pace)
     _p0 = contact_point(server, "serve")
     shot = strike(server, None, face=face, power=power, aim=c[1], shot="serve", surface=surface, wind=wind_vec,
                   trace=0.02, aim_dist=math.hypot(c[0] - _p0[0], c[1] - _p0[1]))
