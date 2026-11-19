@@ -22,9 +22,11 @@ without saying so.
 
 ## 0. The addresses
 
-The app is <https://ai-tribe.netlify.app>. Two of its addresses matter before you own anything:
-**<https://ai-tribe.netlify.app/#/install>** starts a new circle, and **<https://ai-tribe.netlify.app/#/connect>**
-opens one you already have. A circle's own link is `https://ai-tribe.netlify.app/?tribe=your-name/your-circle`, and
+The app is <https://kythe.app>. (Until November 2026 it answered to `ai-tribe.netlify.app`, and every link
+that names that address still opens the same page.) Two of its addresses matter before you own anything:
+**<https://kythe.app/#/install>** starts a new circle, and **<https://kythe.app/#/connect>**
+opens one you already have. A circle's own link is `https://kythe.app/?circle=your-name/your-circle` — links shared
+before November 2026 say `?tribe=` and open the same circle — and
 the keys are at `#/keys` once a circle is open. `LINKS.md` in the repository has the whole list, which is where to
 look on the evening you have forgotten them — a link that lives only in a conversation cannot be found again.
 
