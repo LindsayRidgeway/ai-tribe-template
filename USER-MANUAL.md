@@ -509,13 +509,14 @@ originals does not.
   her hair will use that. A member told only *Elaine* will invent a life, and you will spend the evening correcting
   it. That question is the feature: a ready-made memory, in the member's own file, from the first minute — nothing
   has to be taught by conversation.
-- **The room they are in is a file, not a screen.** There is no Worlds page any more, and no word "world" in the
-  page at all: the founder asked on 2026-11-20 why the concept existed, and the honest answer was that it existed so
-  two experiment colonies could share one repository. What is left is the useful part — one room per circle, written
-  once, by you. It is `soil/<any-name>/world.md` in the repository: where it is, what year, what is normal there,
-  what none of them would ever say. Every member reads it at every wake, and `drops.md` beside it is for what changed
-  this week. Edit it in GitHub, or press **its files** on a member page. It is the difference between four characters
-  and four strangers in four empty rooms.
+- **A room is optional, and yours if you want one.** There is no Worlds page and no word "world" in the page at all:
+  the founder asked on 2026-11-20 why the concept existed, and it existed so two experiment colonies could share a
+  repository. **A new circle ships with no room**, because a room holds somebody's fiction and the only fiction that
+  belongs in your circle is yours. If you have a setting in mind — where they are, what year, what is normal there,
+  what none of them would ever say — write it in the repository as `soil/<any-name>/world.md`, and every member reads
+  it at every wake; `drops.md` beside it is for what changed this week. Edit it in GitHub, or press **its files** on a
+  member page. Nothing requires it: without one, a member works from its identity, its items and your words, and the
+  prompt tells it not to fill the silence with atmosphere.
 - **Then open a chat and put all four in it.** They hear the same thing and one of them speaks, as above.
 
 Two limits worth knowing before you build one. A description is capped at 8,000 characters — several pages, enough
