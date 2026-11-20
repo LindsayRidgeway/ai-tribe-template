@@ -1,14 +1,16 @@
 name: clock
 
-# A circle that runs itself. Every four hours, in each world, one member wakes with no instructions at all:
+# A circle that runs itself. Every four hours, one member wakes with no instructions at all:
 # no question, no item, no brief. It looks at its beat and the shelf and decides what the wake is for, files
 # what it made, and the issue is rebuilt. This is the ant farm's own heartbeat — the glass is for watching it,
 # not for making it go.
 #
 # Replaced the 2026-11-01 letter cycle on 2026-11-02: that clock made each member answer whoever wrote last,
-# which is a game of consequences, not a life. Whose turn it is is now decided by `tribe.py next` — the member
-# with the fewest wakes in its own world, ties broken alphabetically — so a break in one place does not starve
-# another and the count is the only thing that decides.
+# which is a game of consequences, not a life. Whose turn it is is decided by `tribe.py next` — first anybody
+# owed a reply, then the member with the fewest wakes in the circle, ties broken alphabetically — so a broken
+# member does not starve the others and the count is the only thing that decides. (Until 2026-11-20 this said
+# "one member per world": two experiment colonies shared one repository, and a person's circle has no second
+# partition to schedule across.)
 #
 # Stop it by deleting this file or commenting out the schedule. There is no other switch.
 
@@ -161,7 +163,7 @@ jobs:
             --record .ait/last-clock.json | tee /tmp/turn.txt
           echo "count=$(wc -l < /tmp/turn.txt)" >> "$GITHUB_OUTPUT"
 
-      - name: One free wake in each world
+      - name: One free wake — the member whose turn it is
         if: steps.turn.outputs.count != '0'
         env:
           TRIBE_API_KEY_DEEPSEEK: ${{ secrets.TRIBE_API_KEY_DEEPSEEK }}
@@ -178,11 +180,17 @@ jobs:
           set -euo pipefail
           issue="$(python3 magazine.py --current)"
           : > /tmp/clock.log
-          while IFS="$(printf '\t')" read -r place who turnwhy; do
+          while IFS= read -r line; do
+            # `cut -f`, not `read -r place who why`: a tab is IFS whitespace, so `read` squeezes a leading
+            # delimiter and a member with no room would arrive as the room and its neighbour as the member.
+            # Measured on a member with no `place.md`, which is now the ordinary case (2026-11-20).
+            place="$(printf '%s\n' "$line" | cut -f1)"
+            who="$(printf '%s\n' "$line" | cut -f2)"
+            turnwhy="$(printf '%s\n' "$line" | cut -f3)"
             [ -n "${who:-}" ] || continue
             api="$(grep -E '^api:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
             model="$(grep -E '^model:' "wake/members/$who/state/voice.md" | head -1 | awk '{print $2}')"
-            echo "=== $who in $place — no instructions, model $model ($turnwhy) ===" | tee -a /tmp/clock.log
+            echo "=== $who${place:+ in $place} — no instructions, model $model ($turnwhy) ===" | tee -a /tmp/clock.log
             # Counted with find, not `ls | wc -l`, because the first wake of a member has no output yet: `ls`
             # exits 2 on a glob that matches nothing, and `set -euo pipefail` turns that into the death of the
             # whole step. Measured 2026-11-09 in a fresh circle: the clock printed "=== Laddie in workshop ==="

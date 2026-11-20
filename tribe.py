@@ -41,8 +41,9 @@ REQUIRED = {
     "voice.md": ("human", "which API and model it borrows"),
 }
 OPTIONAL = {
-    "place.md": ("human", "which soil this member stands in: one line, `place: <directory under soil/>`. "
-                          "Two colonies can share a repository and live in different worlds"),
+    "place.md": ("human", "**legacy, and optional.** `place: <a directory under soil/>`, from when two "
+                          "colonies shared one repository and each stood in its own. A circle has one room "
+                          "now: a member without this line reads it, and the clock wakes it like any other"),
     "beat.md": ("member", "what this member is interested in, as opposed to what it was asked; read into "
                           "every wake. Not a task list, and nobody assigns it"),
     "brief.md": ("human+convener", "what the circle is working on now; included in the prompt"),
@@ -474,10 +475,10 @@ def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", pe
     (base / "state" / "voice.md").write_text(
         f"# Voice — member {name}\n\nThe model this member borrows. Changing the model here does not make "
         f"it someone else: the member is its files.\n\napi: {api}\nmodel: {model}\n", encoding="utf-8")
-    # The place is what makes a member *in a colony* rather than a fixture in a folder: `next_up` groups
-    # members by place to pick one per world, and (since 2026-11-03) prints nothing at all for a member
-    # that has none. RUN.md §6 has described this line since the paragraph was written; the code did not
-    # write it, so a member created exactly as documented validated, existed, and never got a turn.
+    # `place.md` is legacy since 2026-11-20 and it is written only when it can be written *true*: a room was named
+    # on the command line, or the circle has exactly one and the member plainly stands in it. It gates nothing —
+    # `next_up` used to skip a member with no place, which made a world mandatory, and that was the defect the
+    # founder asked about. A member is a member; the line is a note about where it stood, not an admission.
     known = worlds()
     where = place or (known[0] if len(known) == 1 else "")
     if where:
@@ -492,14 +493,11 @@ def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", pe
         "**Waiting on you**\n\n- (empty)\n\n"
         "**Queued**\n\n1. Write your first file: what is this circle for, and what would it refuse to do?\n",
         encoding="utf-8")
-    if not where:
-        # More than one world, or none: guessing would put a being in somebody else's ground, and saying
-        # nothing would leave it outside every world — visible in `status`, refused by `next`. So it says.
-        print(f"!! {name} stands in no world yet: this colony has "
-              f"{'more than one place (' + ', '.join(known) + ')' if known else 'no place at all'}.")
-        print(f"   give it one — one line, or re-create it with --place: "
-              f"echo 'place: {known[0] if known else 'workshop'}' > wake/members/{name}/state/place.md")
-        print("   until then no clock will ever wake it, because a member with no place is not in a colony.")
+    if place and place not in known:
+        # Only a place that was asked for by name can be wrong, and printing "it stands nowhere" was worse than
+        # useless: until 2026-11-20 that sentence also said no clock would ever wake it, which was true then and
+        # is false now. The member exists and will be woken; the room is the circle's, not the member's.
+        print(f"   note: no room called {place!r} under soil/ — it will read the circle's room instead.")
     bad = validate(name)
     if bad:
         print("created, but it does not validate:")
@@ -769,11 +767,12 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     forced = [n.strip() for n in force.replace(",", " ").split() if n.strip()]
     if forced:
         # The human's hand on the glass: name a member and it wakes now, wherever it stands. Every ant
-        # farm has a hole in the lid. This does NOT bypass the colony rule — a member with no place has
-        # no world to be woken into — and it does not touch the count, so the next automatic turn still
-        # goes to whoever has the fewest wakes.
-        return [(place_of(d) or "(no place)", d.name, "woken by name") for d in member_dirs()
-                if d.name in forced and place_of(d) and (d / "state" / "voice.md").exists()]
+        # farm has a hole in the lid. Until 2026-11-20 this also refused a member with no `place`, because a
+        # world was mandatory — so on a circle with no room the page's Wake now button did nothing at all and
+        # said nothing about why. It does not touch the count, so the next automatic turn still goes to
+        # whoever has the fewest wakes.
+        return [(place_of(d), d.name, "woken by name") for d in member_dirs()
+                if d.name in forced and (d / "state" / "voice.md").exists()]
     # Which vendors this repository actually has a key for. A tester following RUN.md adds ONE key, and
     # the clock then wakes one member per world — so half a colony's turns would be spent on a member whose
     # model cannot be reached, recorded as a failure that is not the member's. Skipping is the honest

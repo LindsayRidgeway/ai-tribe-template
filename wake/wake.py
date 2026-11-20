@@ -180,10 +180,10 @@ changes; say in your journal that you did.
 
 {beat}
 
-=== THE SOIL (the world this circle is in, written by the human) ===
-The world, not a to-do list. The same members in different soil build different tunnels, and this block
-is the soil. If something your beat wants contradicts the soil, the soil wins on facts and you win on
-taste — say so rather than pretending.
+=== THE SOIL (the room this circle is in, written by the human) ===
+The place you are standing in, not a to-do list: a person wrote what is here and what it is for. If
+something your beat wants contradicts it, it wins on facts and you win on taste — say so rather than
+pretending.
 
 {soil}
 
@@ -1134,9 +1134,15 @@ def main() -> int:
     for d in soil_dirs:
         for name in ("world.md", "drops.md"):
             try:
-                text = read(d / name)[-2500:]
+                whole = read(d / name)
             except Exception:  # noqa: BLE001
                 continue
+            # Which end of a long file a wake gets: the *front* of the room, the *back* of the table. The manual has
+            # told people since 2026-11-02 to put the setting first and the lore after it, and this read the last
+            # 2,500 characters of both — so the file's instructions and the machine disagreed, and a person who
+            # followed the book had the part that mattered cut off. Drops are the other way round by nature: what
+            # fell in this week is at the bottom.
+            text = whole[-2500:] if name == "drops.md" else whole[:2500]
             soil_parts.append(mark_new_drops(text, last_wake) if name == "drops.md" else text)
         if soil_parts:
             break

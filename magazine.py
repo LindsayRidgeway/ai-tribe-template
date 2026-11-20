@@ -114,7 +114,11 @@ def drops(root: Path | None = None) -> list[tuple[str, str]]:
 
 
 def places(root: Path | None = None, members: list[str] | None = None) -> dict[str, str]:
-    """Which world each member stands in, read from its own files."""
+    """Where each member stood, from its own `place.md` — empty when it never had one.
+
+    **Legacy since 2026-11-20.** A circle has one room; the line survives so that a repository from before that
+    date, which holds two experiment colonies, still prints them apart. Nothing schedules by it.
+    """
     root = root or HERE
     out = {}
     for m in (members or [p.name for p in (root / "wake" / "members").glob("*") if p.is_dir()]):
@@ -125,6 +129,29 @@ def places(root: Path | None = None, members: list[str] | None = None) -> dict[s
         except (OSError, IndexError):
             out[m] = ""
     return out
+
+
+def rooms(root: Path | None = None) -> list[str]:
+    """The room folders under `soil/`, alphabetically. A circle has one; two is a repository from before
+    2026-11-20, and `wake.py` reads the first.
+
+    Why this exists at all: deleting worlds removed the only way the issue's title found a name, because the
+    title came from each member's `place.md`. An ordinary circle has no `place.md` files — so the magazine of
+    every circle made from the template after that date printed a title nobody had written.
+    """
+    root = root or HERE
+    base = root / "soil"
+    return sorted(p.name for p in base.glob("*") if p.is_dir()) if base.is_dir() else []
+
+
+def circle_name(root: Path | None = None) -> str:
+    """What to print when the circle has neither a room with a name file nor a member with a place.
+
+    The repository's own directory name, title-cased, because that is a name the person did choose. Not
+    "The Workshop": that was this bench's own fiction, and it was printing at the top of other people's issues.
+    """
+    root = root or HERE
+    return root.name.replace("_", " ").replace("-", " ").strip().title() or "The circle"
 
 
 CITE_RE = re.compile(r"`?([A-Za-z0-9_.-]+\.md)`?")
@@ -413,12 +440,13 @@ def build(issue: str, works: list[dict] | None = None, root: Path | None = None)
     else:
         census = "nothing"
     now = datetime.now(timezone.utc)
-    here = sorted({p for p in places(root, sorted({w["member"] for w in mine})).values() if p})
-    where = f" — {', '.join(here)}" if here else ""
-    # The magazine is named after the world, not after this repository. One world in the issue: its name.
-    # Several: the names, because pretending an issue belongs to one colony when it belongs to two is the
-    # wart this used to sit behind.
-    title = " · ".join(place_name(pl, root) for pl in here) if here else "The Workshop"
+    standing = sorted({p for p in places(root, sorted({w["member"] for w in mine})).values() if p})
+    where = f" — {', '.join(standing)}" if standing else ""
+    # The magazine is named after the circle, not after this repository. One room named by a member's legacy
+    # `place.md`: its name. A room with no member standing in it by name — the ordinary circle since
+    # 2026-11-20 — is found on disk. Neither: the repository's name, which at least the person chose.
+    named = standing or rooms(root)[:1]
+    title = " · ".join(place_name(pl, root) for pl in named) if named else circle_name(root)
     out = [f"# {title} — issue {issue}{where}", "",
            f"*{census}, assembled from `works/` on "
            f"{issue_date(mine, now)} by `magazine.py`. The pieces are the members'; the order is not.*", ""]

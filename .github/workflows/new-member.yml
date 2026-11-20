@@ -41,7 +41,7 @@ on:
         required: false
         default: ""
       place:
-        description: "which world it stands in — leave blank when your colony has only one"
+        description: "leave this blank. A circle has one room and every member reads it. The field is kept only for a repository made before 2026-11-20 that still has more than one room in soil/"
         required: false
         default: ""
       person:
@@ -101,9 +101,8 @@ jobs:
           # looped. Found by the founder on a phone, where there is no shell to fall back on.
           if [ -d "wake/members/$NAME" ]; then
             if [ -z "$PLACE" ]; then
-              echo "::error::$NAME already exists in this colony, so nothing was created."
-              echo "To put it in a world, send this form again with the SAME name and the place field filled."
-              echo "To change anything else about it, edit its files in wake/members/$NAME/state/."
+              echo "::error::$NAME already exists in this circle, so nothing was created."
+              echo "To change it, edit its files in wake/members/$NAME/state/ — its identity, its voice, its beat."
               exit 1
             fi
             python3 tribe.py place "$NAME" "$PLACE" | tee /tmp/created.txt
@@ -120,11 +119,10 @@ jobs:
             python3 tribe.py new "$NAME" "${args[@]}" | tee /tmp/created.txt
           fi
 
-          if [ ! -f "wake/members/$NAME/state/place.md" ]; then
-            echo "::warning::$NAME stands in no world yet, so no clock will ever wake it."
-            echo "::warning::Send this form again with the same name and the place field filled with one of:"
-            ls -1 soil/ | while read -r w; do echo "::warning::  $w"; done
-          fi
+          # No check for place.md here any more. Until 2026-11-20 a missing one printed "stands in no world yet, so
+          # no clock will ever wake it" and told the person to send the form again with a world filled in — and on a
+          # circle made from the template after that date there is no room in the repository at all, so the warning
+          # was both false and impossible to satisfy. A member is woken by the clock because it is a member.
 
       - name: Check it against the schema before anything is committed
         env:
@@ -173,8 +171,9 @@ jobs:
             echo "Next: open an issue with \`@tribe ${NAME:-name}: hello\` — or use the page, if this"
             echo "repository has one — and it will answer in the thread."
             echo
-            echo "If its files say it stands in no world, give it one: edit"
-            echo "\`wake/members/${NAME:-name}/state/place.md\` to read \`place: <your world>\`."
+            echo "Nothing else is needed: the clock will wake it, and it reads whatever is in the"
+            echo "circle's room under \`soil/\`. To give it a job, put a numbered line in its"
+            echo "\`open-items.md\`."
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           NAME: ${{ inputs.name }}

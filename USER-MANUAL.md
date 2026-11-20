@@ -186,7 +186,8 @@ Ten things about that conversation are promises, not manners.
 - **"Just do it" works at every question.** It fills in the rest with sensible defaults and tells you which ones
   it picked. **"Cancel"** writes nothing; no half-made member is left behind.
 - **The last question read the whole thing back before writing it.** The first member anyone makes is made before
-  they know what a room is, and a member with no room is never woken.
+  they know what a room is, and the circle works from the first minute either way: a member is woken because it is
+  a member, room or no room.
 - **It asked your name once, and wrote it into her identity.** "Lindsay Ridgeway is a close friend. I love talking
   to Lindsay about many things." A member told that answers a person; a member told only what it is for answers a
   room, and sounds like a form letter doing an impression of a colleague. Skip the question and the identity says
@@ -433,7 +434,7 @@ that difference is the whole point of keeping a record.
 
 **What reaches a wake, and what does not.** This is the one thing worth knowing before you tell a member to make
 something, because the answer is not what people expect. A wake is handed: the member's identity, its state, its
-journal, its open items, its beat, the soil, the brief, its projects, and the shelf — **and never the conversation
+journal, its open items, its beat, the room, the brief, its projects, and the shelf — **and never the conversation
 above.** So *"George, could you write me a page about the workshop"*, said in the talk, is not in front of the next
 wake unless George happened to write it down as a `NOTE:` in its journal in that same turn. Two channels do reach a
 wake. The reliable one is **Give it a job** on the member's page: one box, one press, and it appends a numbered item
@@ -1086,9 +1087,7 @@ to, and will never have to.
 | in Kythe | underneath |
 |---|---|
 | Connect to a circle | a `GET /repos/<owner>/<name>` with a token, which proves the token can see the repository before anything is written. If this browser has opened that repository before, the token is taken from what it already holds and the box can be left empty; the button reads **Open** rather than **Connect** |
-| Make a world | writes `soil/<world>/name.md` (the title the magazine prints) and `soil/<world>/world.md` (the setting every member standing there reads at every wake), two commits. The folder name is checked against the worlds you already have before anything is written, and so is the one silent failure: a world with no `world.md` reaches nobody |
-| Save a world file | one commit to that world's `name.md`, `world.md` or `drops.md` — the same read-then-write as the identity editor, with the same retry when GitHub's read lags its own write, and the same refusal to overwrite a file that changed under you without a second press |
-| Add a member | writes a member's folder (identity, voice, state, journal, open items, place) and commits it. The description you paste — the answer to *does it arrive with a memory?* — goes into `identity.md`, in the member's own voice, before anything else is written |
+| Add a member | writes a member's folder (identity, voice, state, journal, open items) and commits it. The description you paste — the answer to *does it arrive with a memory?* — goes into `identity.md`, in the member's own voice, before anything else is written |
 | Wake now | starts a wake run for that member, waits for it, and reports what it left in the member's `output/` folder — the file it wrote, named, or that nothing was written, with the run's number beside it. A green run is not a wake: a member the clock skipped leaves every step successful |
 | Give it a job | lists the items it already has, each with **done**, and appends one numbered item to `state/open-items.md` — the file a wake reads as its open items, and the only channel from this page that a wake is guaranteed to see. Numbering is taken from the items already there and from the done log, so a retired number is never reused; an empty or missing file is created. **done** moves an item to `state/done.md` with the date, which is how a finished job stops being a chore — the member reads `open-items.md`, not the done log. A conflict (the file changed under the box) is reported rather than overwritten |
 | Open a file a wake left | reads `wake/members/<name>/output/raw-<UTC>.json` from the repository and shows it in a window, trimmed at 12,000 characters with the count of what was cut. One of those exists per wake that reached an engine — a scheduled wake included, which used to leave files nothing in the page could open |
