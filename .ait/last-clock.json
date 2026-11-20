@@ -1,7 +1,8 @@
 {
  "schema": "ait-clock/1",
- "when": "2026-11-20T07:25:41Z",
+ "when": "2026-11-20T17:00:00Z",
  "engines": [],
  "turns": [],
- "skipped": []
+ "skipped": [],
+ "idle": []
 }
