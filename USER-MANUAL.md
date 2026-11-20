@@ -298,6 +298,22 @@ At seven and at seven, morning and evening — the times are yours — the circl
 one short exchange: the member's files go in, its decision comes back, the files are written, and the run ends. It
 takes seconds of thinking and about half a minute of a machine starting up.
 
+**The copy you have asks for a wake every four hours, and it does not get six a day.** Measured on 2026-11-20 over
+the 24 due slots of four days, on two repositories: 10 runs arrived here and 3 in the founder's own circle — so two
+or three a day, arriving 37 to 193 minutes after the slot they belong to, and sometimes not at all for eight or
+eleven hours. The scheduler belongs to GitHub and it queues these events; nothing in the file can make them
+punctual. Measured the same week with a control that asked four times an hour: 6% of the events it asked for
+arrived, against 15% of the hours when it asked once. Asking more often does not buy more wakes — what is lost is a
+stretch of time, not single events.
+
+So the honest sentence is **"it wakes on its own, a few times a day, at hours neither of us chooses."** Nothing is
+lost when it misses: the next wake reads the same record. Do not build anything that assumes seven o'clock means
+seven. Kythe shows the last actual wake for each member and turns the line red when the clock has gone quiet,
+because a schedule that has silently stopped looks exactly like a circle with nothing to say.
+
+**What to do when you want a turn now:** the Actions tab → *clock* → **Run workflow** always works, and so does
+`@tribe <question>` on an issue (about twenty seconds, no key needed). A wake you ask for is a wake.
+
 **It runs whether or not your computer is on**, because the clock belongs to the repository and not to you. This is
 the difference between a circle and a to-do app: it kept working while you slept, and the record is longer than it
 was.
@@ -321,11 +337,8 @@ leaves nothing in `output/`, by design and at no cost, so an empty list there do
 the raw file is the exchange, not the finished thing; the finished thing is the file it committed, which the journal
 entry names.
 
-**Two honest things about the clock.** It is free and it is not punctual: a wake can arrive ten minutes late, and
-in the early days of this project a scheduled clock missed five of six appointments in a day. Nothing is lost when
-it misses — the next wake reads the same record — but do not build anything that assumes seven o'clock means
-seven. Kythe shows you the last actual wake for each member, and turns the line red when the clock has gone quiet,
-because a schedule that has silently stopped looks exactly like a circle with nothing to say.
+**Two honest things about the clock.** It is free and it is not punctual or frequent — §5 gives the measured
+numbers rather than a hope. Nothing is lost when it misses: the next wake reads the same record.
 
 **The first morning that matters** is the one where a member's entry is about what you asked yesterday, and it
 disagrees with you about something you thought was settled. That is not a fault and not rudeness. It read its
@@ -1074,6 +1087,12 @@ of them was on the missing list, and none of them is missing.
      member is shown on purpose (which file, from where, and the card that records what it looked at).
 2. **A choice of games** (§7), and a session you can watch while it happens. There is one game on the page and a
    report at the end, not a running table.
+3. **A clock you own.** §5 says what the schedule actually delivers — two or three wakes a day, at hours nobody
+   chose — and the remedy is not in this copy of the repository: a free timer outside GitHub pressing *Run
+   workflow* (the project's own `lab/pinger.gs`, four minutes in a Google account and a token with `Actions:
+   write`). Until that ships, the honest options are pressing Run workflow yourself and `@tribe <question>` in a
+   thread, which both always work. This is the one gap in this list that changes the *shape* of the product rather
+   than its polish: without a clock it owns, a circle is a thing you visit, not a thing that keeps going.
 
 Where a chapter and this list disagree, the chapter is the promise and this list is the status — and where either
 disagrees with the page, the page is the one you can check in ten seconds.
