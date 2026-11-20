@@ -453,6 +453,17 @@ discovered later: the prompt calls open items *the chores* and ranks them below 
 peer's work. It will notice the job; it may say why something else outranks it, and that answer is allowed. A job put
 in front of a member is a request, not a command — which is the difference between a circle and a form.
 
+**A member with nothing to do does nothing — and costs nothing.** The clock does not wake a member that has nothing
+to answer: no numbered item, no written request unanswered, no brief with anything in it, no drop in the room since
+it last looked, and nothing new on the shelf from another member. Such a turn makes no engine call, commits nothing,
+and appears in `.ait/last-clock.json` under `idle`, with the reason, so a quiet circle can be told apart from a broken
+one. A member that has never woken is woken once, because reading its own identity is what it was made for.
+
+That is deliberate, and it is the answer to the obvious question: *why would it write something I did not ask for?*
+It won't. The member's own beat decides **how** it does the work you gave it, never **whether** it spends a turn. If
+you want it to think on its own for a while, say so in a way it can read — a line in `soil/<room>/drops.md`, a brief,
+or **Wake now**, which still wakes whoever you name because a person pressing a button is a person asking.
+
 **Where the file goes is not your problem.** The reply contract hands the member
 `wake/members/<name>/output/<short-name>.md`, and the harness keeps only the last part of whatever path it writes:
 `works/George/doc.md`, an absolute path and `../../etc/passwd` all land in that member's own `output/`, beside the raw

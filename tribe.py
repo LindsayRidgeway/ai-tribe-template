@@ -643,6 +643,7 @@ def api_of(d: Path) -> str:
 # two lines later, "every member was skipped: no member has a voice.md, or none has a key here": the guess landing
 # on top of the fact, in the first message a new owner reads.
 LAST_SKIPPED: list[tuple[str, str]] = []
+LAST_IDLE: list[tuple[str, str]] = []
 
 
 def keyed_from_env(prefix: str = "TRIBE_API_KEY_") -> str:
@@ -680,7 +681,72 @@ def record_clock(path: str, engines: list[str], rows: list[tuple[str, str, str]]
         "engines": sorted({e for e in engines if e}),
         "turns": [{"place": place, "member": name, "why": why} for place, name, why in rows],
         "skipped": [{"member": name, "engine": engine} for name, engine in LAST_SKIPPED],
+        "idle": [{"member": name, "why": why} for name, why in LAST_IDLE],
     }, indent=1) + "\n", encoding="utf-8")
+
+
+def idle_reason(d: Path, place: str) -> str:
+    """Empty when something a person gave this member is waiting; otherwise the reason a turn is not needed.
+
+    The founder, 2026-11-20, twice: *"Why is a member writing something that the user has not asked for?"* and, of
+    the transcript the page then showed him, *"a visible manifestation of the waste"*. The rule that produced it was
+    the prompt's: a beat outranks the chores, so a member with an empty list writer from its own interest, and a
+    circle with nobody in the room accumulates documents nobody asked for. A wake costs tokens, a commit and a
+    reader's attention; on a clock that fires six times a day in every installed circle, that is the product's
+    largest silent expense.
+
+    So: the beat decides HOW a member works, never WHETHER it spends a turn. What may claim a turn is only what a
+    person put there, or what a peer put on the shelf:
+
+      - an open item — a number in `state/open-items.md`;
+      - a written request it has not answered (`debt()`);
+      - a brief with anything in it;
+      - a drop in this world's `soil/<place>/drops.md`, dated on or after its last wake;
+      - a peer's work filed after its last wake;
+
+    and a member that has never woken is woken once, because reading its own identity is the first thing it was
+    made for. Anything else is a quiet turn: no engine call, no cost, and the reason written into the clock record
+    so a person can see that the circle is idle rather than broken. `--force` (the page's Wake now) still wakes
+    whoever is named: a person pressing a button is a person asking.
+    """
+    if wakes_of(d) == 0:
+        return ""                       # never woken: it has not yet read its own identity
+    state = d / "state"
+    def text(name: str) -> str:
+        try:
+            return (state / name).read_text(encoding="utf-8")
+        except OSError:
+            return ""
+    if re.search(r"^\s*\d+[.)]\s+\S", text("open-items.md"), re.M):
+        return ""                       # a chore with a number is a chore a person typed
+    try:
+        if debt(d.name, place):
+            return ""                   # somebody asked in writing and has not been answered
+    except Exception:                   # a schema it cannot read is not a reason to stop the clock
+        return ""
+    if re.search(r"\S", re.sub(r"^\s*#.*$", "", text("brief.md"), flags=re.M)):
+        return ""                       # the circle is working on something and this is part of it
+    last = last_wake_of(d)
+    try:
+        root = MEMBERS.parent.parent
+    except Exception:
+        root = REPO
+    drops = root / "soil" / place / "drops.md"
+    if drops.is_file():
+        try:
+            for line in drops.read_text(encoding="utf-8").splitlines():
+                m = re.match(r"\|\s*(\d{4})-(\d{2})-(\d{2})\s*\|", line)
+                if m and (not last or m.group(1) + m.group(2) + m.group(3) >= last[:8]):
+                    return ""           # somebody put something in the room since it last looked
+        except OSError:
+            pass
+    for p in sorted((root / "works").glob("*/[0-9]*.md")):
+        if p.parent.name == d.name:
+            continue                    # its own work is not a reason
+        if not last or p.name[:13] > last[:13]:
+            return ""                   # a peer published since its last turn
+    return ("nothing to answer: no open item, no request, no brief, no drop since its last wake, and no peer "
+            "work filed since")
 
 
 def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
@@ -693,6 +759,7 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     somebody edits to favour somebody.
     """
     LAST_SKIPPED.clear()
+    LAST_IDLE.clear()
     forced = [n.strip() for n in force.replace(",", " ").split() if n.strip()]
     if forced:
         # The human's hand on the glass: name a member and it wakes now, wherever it stands. Every ant
@@ -708,6 +775,7 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     keyed_vendors = [v.strip().lower() for v in keyed.replace(",", " ").split() if v.strip()]
     by_place: dict[str, list[Path]] = {}
     skipped: list[tuple[str, str]] = []
+    idle: list[tuple[str, str]] = []
     for d in member_dirs():
         if not (d / "state" / "voice.md").exists():
             continue   # a member with no voice cannot be woken at all; counting it would stall the clock
@@ -716,6 +784,10 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
         vendor = api_of(d)
         if keyed_vendors and vendor and vendor not in keyed_vendors:
             skipped.append((d.name, vendor))
+            continue
+        why_idle = idle_reason(d, place_of(d))
+        if why_idle:
+            idle.append((d.name, why_idle))
             continue
         by_place.setdefault(place_of(d), []).append(d)
     out = []
@@ -747,7 +819,10 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     for name, vendor in skipped:
         print(f"   {name} is on {vendor} and this repository has no key for it — skipped, not failed",
               file=sys.stderr)
+    for name, why in idle:
+        print(f"   {name} is not woken this turn — {why}", file=sys.stderr)
     LAST_SKIPPED[:] = skipped
+    LAST_IDLE[:] = idle
     return out
 
 
@@ -1009,6 +1084,10 @@ def main() -> int:
                       file=sys.stderr)
             elif LAST_SKIPPED:
                 pass   # the lines above named each member and its engine; a generic guess would bury them
+            elif LAST_IDLE:
+                print("   every member had nothing to answer, so the circle was quiet this turn — and cost "
+                      "nothing. Give one of them an item, a brief, or a drop; press Wake now to have it think "
+                      "anyway.", file=sys.stderr)
             else:
                 print("   every member was skipped: no member has a voice.md, or none has a key here. "
                       "`tribe.py status` shows which.", file=sys.stderr)
