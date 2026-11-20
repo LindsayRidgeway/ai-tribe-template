@@ -65,7 +65,7 @@ the design: a person can audit any part of a participant's mind in a text editor
 | `identity.md` | who it is. A few paragraphs, in its own voice: its seat, who it talks to, the paragraph that lets it be the figure it is seated as, and — when it is a figure — what is written about it. Written once by `tribe.py new` from `--seat`, `--person` and `--about`. | you, once |
 | `voice.md` | two lines: which **engine** it borrows (`api:` and `model:`), and its register. | you, when an engine is retired |
 | `beat.md` | what it is interested in, as opposed to what it has been asked. Its standing angle. | the participant |
-| `place.md` | where it works — `workshop`, `garden`, whatever the circle's setting is. | you, once |
+| `place.md` | **legacy, since 2026-11-20.** It used to say which `soil/` folder a member stood in, and a member without it was never woken. Nothing requires it now: a circle has one room and every member reads it. A circle from before that date keeps working, and the line is only read to pick between folders when there is more than one. | you, once |
 | `state.md` | **its state**: how many times it has woken, when it last woke, what it is doing now. | the harness, three lines only |
 | `open-items.md` | the numbered list of things it is trying to do. One is acted on per wake. | the participant, mostly |
 | `journal.md` | **its journal**: a diary. One entry per wake, in its own words. | the participant |

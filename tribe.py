@@ -731,7 +731,13 @@ def idle_reason(d: Path, place: str) -> str:
         root = MEMBERS.parent.parent
     except Exception:
         root = REPO
-    drops = root / "soil" / place / "drops.md"
+    base = root / "soil"
+    if place:
+        room = base / place
+    else:
+        rooms = sorted((p for p in base.glob("*") if p.is_dir()), key=lambda p: p.name) if base.is_dir() else []
+        room = rooms[0] if rooms else base
+    drops = room / "drops.md"
     if drops.is_file():
         try:
             for line in drops.read_text(encoding="utf-8").splitlines():
@@ -779,8 +785,9 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
     for d in member_dirs():
         if not (d / "state" / "voice.md").exists():
             continue   # a member with no voice cannot be woken at all; counting it would stall the clock
-        if not place_of(d):
-            continue   # a fixture with no place is not in a colony; scheduling it would wake the lab rats
+        # Until 2026-11-20 a member with no `place` was not in a colony and was never woken, which made a world
+        # mandatory. A member is a member; `place` is read only so the clock record can say where it stood, and it
+        # is empty for anybody a circle has without one.
         vendor = api_of(d)
         if keyed_vendors and vendor and vendor not in keyed_vendors:
             skipped.append((d.name, vendor))
@@ -791,29 +798,33 @@ def next_up(force: str = "", keyed: str = "") -> list[tuple[str, str, str]]:
             continue
         by_place.setdefault(place_of(d), []).append(d)
     out = []
-    for place in sorted(by_place):
-        # A debt first, then the count. Ties inside each still break alphabetically, which is arbitrary
-        # and recorded as arbitrary.
-        def pressing(d: Path) -> tuple[int, str]:
-            owed = debt(d.name, place)
-            if not owed:
-                return 1, ""
-            # One turn per request. A member that has already woken since the oldest unpaid letter and
-            # spent the wake on something else has exercised its judgement, and the clock does not get to
-            # make the debt a cage: A was woken at 05:03 owing C two letters, used the wake to rewrite an
-            # earlier answer, and under a plain "debt first" rule it would have been woken again and again
-            # until it complied. Pressing only while the member has not had a turn since the request
-            # keeps the pull real and keeps the choice theirs.
-            return (0 if is_pressing(last_wake_of(d), oldest_debt(d.name)) else 1), f"owed {owed}"
+    # One circle, one turn. Until 2026-11-20 this grouped the members by `place` and gave every world a turn of its
+    # own, because two experiment colonies shared one repository — the founder's question, and the answer, are in
+    # RELEASE.md under "Deleting worlds". A person has a circle with members in it; there is no second partition to
+    # schedule across, and the count is the fairness rule that predates the split.
+    pool = [d for place in sorted(by_place) for d in by_place[place]]
 
-        group = sorted(by_place[place], key=lambda d: (*pressing(d)[:1], wakes_of(d), d.name))
+    def pressing(d: Path) -> tuple[int, str]:
+        owed = debt(d.name, place_of(d))
+        if not owed:
+            return 1, ""
+        # One turn per request. A member that has already woken since the oldest unpaid letter and
+        # spent the wake on something else has exercised its judgement, and the clock does not get to
+        # make the debt a cage: A was woken at 05:03 owing C two letters, used the wake to rewrite an
+        # earlier answer, and under a plain "debt first" rule it would have been woken again and again
+        # until it complied. Pressing only while the member has not had a turn since the request
+        # keeps the pull real and keeps the choice theirs.
+        return (0 if is_pressing(last_wake_of(d), oldest_debt(d.name)) else 1), f"owed {owed}"
+
+    if pool:
+        group = sorted(pool, key=lambda d: (*pressing(d)[:1], wakes_of(d), d.name))
         chosen = group[0]
         state, note = pressing(chosen)
-        owed = debt(chosen.name, place)
+        owed = debt(chosen.name, place_of(chosen))
         why = (f"{note} answer(s), not woken since" if state == 0
                else (f"{note} still owed, but it has had its turn" if owed
-                     else f"fewest wakes ({wakes_of(chosen)} in {place})"))
-        out.append((place or "(no place)", chosen.name, why))
+                     else f"fewest wakes ({wakes_of(chosen)} in this circle)"))
+        out.append((place_of(chosen), chosen.name, why))
     # stderr, never stdout: the clock reads stdout line by line as "place<TAB>member<TAB>why", and one
     # explanatory line in there would be parsed as a member called "skip".
     for name, vendor in skipped:

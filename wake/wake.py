@@ -1114,8 +1114,13 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         place = ""
     soil_parts = []
-    soil_dirs = [ROOT.parent / "soil" / place] if place else []
-    soil_dirs.append(ROOT.parent / "soil")   # the flat layout, for a member that predates places
+    # One room per circle (2026-11-20). `place` still names a folder when a circle from before that has one, and a
+    # member without it reads the circle's single room — the only directory under `soil/` — because a member that
+    # reads nothing writes generic prose about nothing. Two rooms no longer mean two colonies; the second is ignored
+    # alphabetically rather than scheduled, which is the whole of what "worlds" used to be.
+    _base = ROOT.parent / "soil"
+    soil_dirs = [_base / place] if place else sorted((p for p in _base.glob("*") if p.is_dir()), key=lambda p: p.name)[:1] if _base.is_dir() else []
+    soil_dirs.append(_base)   # the flat layout, for a member that predates places
     try:
         last_wake = " ".join(line.split(":", 1)[1].split()) if (line := next(
             (ln for ln in read(STATE / "state.md").splitlines() if ln.startswith("- Last wake:")), "")) else ""

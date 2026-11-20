@@ -158,16 +158,11 @@ Kythe     Which engine should she borrow? Each is a company whose model does her
           3. Groq     — fastest
           4. something else
 YOU       1
-Kythe     Which world does she stand in? A world is a folder under soil/, and what is
-          written in it is read by every member that stands there — the setting, the
-          weather, what changed this week. Most circles need one.
-YOU       workshop
 Kythe     That's everything:
           name    Margot
           for     the one who keeps the records
           knows   nothing yet — it is someone new
           engine  Gemini
-          world   workshop
           talks to you, Lindsay Ridgeway
           Make her? Say yes, or name something to change.
 YOU       yes
@@ -514,16 +509,18 @@ originals does not.
   her hair will use that. A member told only *Elaine* will invent a life, and you will spend the evening correcting
   it. That question is the feature: a ready-made memory, in the member's own file, from the first minute — nothing
   has to be taught by conversation.
-- **The ground is a world, not the chat.** A chat is the table they sit at; a world is the place they live. Press
-  **Worlds** in the navigation, make one, and write what is in it: where it is, what year, what is normal there, what
-  none of them would ever say — and who knows whom. Every member standing in that world reads it at every wake, and
-  `drops.md` beside it is for what changed this week. This is the difference between four characters and four
-  strangers in four empty rooms.
+- **The room they are in is a file, not a screen.** There is no Worlds page any more, and no word "world" in the
+  page at all: the founder asked on 2026-11-20 why the concept existed, and the honest answer was that it existed so
+  two experiment colonies could share one repository. What is left is the useful part — one room per circle, written
+  once, by you. It is `soil/<any-name>/world.md` in the repository: where it is, what year, what is normal there,
+  what none of them would ever say. Every member reads it at every wake, and `drops.md` beside it is for what changed
+  this week. Edit it in GitHub, or press **its files** on a member page. It is the difference between four characters
+  and four strangers in four empty rooms.
 - **Then open a chat and put all four in it.** They hear the same thing and one of them speaks, as above.
 
 Two limits worth knowing before you build one. A description is capped at 8,000 characters — several pages, enough
-for a character and not for a whole wiki. And a world's text is read only up to its last 2,500 characters at a wake,
-so the setting belongs first and the lore after it; a world's `world.md` is not the place for a novel.
+for a character and not for a whole wiki. And the room's text is read only up to its last 2,500 characters at a wake,
+so the setting belongs first and the lore after it; that file is not the place for a novel.
 
 ### Who gets the floor
 
@@ -1026,10 +1023,10 @@ two testers read it and each found it denying features that were working in fron
 of them was on the missing list, and none of them is missing.
 - **Sign-in and repository creation** (§3) — one OAuth round trip, then a repository made, filled and opened.
 - **Onboarding as a conversation** (§4) — *Add a member*, one question at a time, writing the files as it goes.
-- **Worlds** (§6a) — 2026-11-15: the ground itself, written from the page. **Worlds** lists every `soil/` folder
-  with who stands in it, opens one, and saves `name.md` (the title the magazine prints), `world.md` (the setting read
-  into every wake) and `drops.md` (what changed this week); a world can be made from the same page in three fields.
-  Until this, a person with a browser could cast four characters and give them nowhere to live.
+- ~~**Worlds** (§6a) — 2026-11-15~~ — **withdrawn 2026-11-20.** The page could list, make and edit worlds, and it no
+  longer can: the founder asked why the concept existed, and it existed because two experiment colonies needed to
+  share one repository. There is one room per circle now, it is a file, and the page does not mention it. The room's
+  text is still read into every wake — see §6b.
 - **The identity a member is made with** (§4) — 2026-11-13: every new member is given, in its own voice, the
   paragraph that lets it be the figure it is seated as rather than a model apologising for a part, and the form
   asks what is known about it. That answer is a ready-made memory in the member's own file from its first minute —
