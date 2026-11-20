@@ -48,6 +48,9 @@ OPTIONAL = {
     "brief.md": ("human+convener", "what the circle is working on now; included in the prompt"),
     "requests.md": ("member", "read-only checks it wants run before its next wake"),
     "findings.md": ("harness", "what those checks said"),
+    "done.md": ("human", "open items the person has retired, with the date. Written when someone presses done in "
+                         "the page's box; kept out of open-items.md so a finished job is not handed back to the "
+                         "member as a chore to do again"),
 }
 
 STATE_LINES = ("Wakes so far:", "Last wake:", "Model used:")

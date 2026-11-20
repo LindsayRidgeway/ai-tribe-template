@@ -728,6 +728,28 @@ def squash(text: str, limit: int = 320) -> str:
     return flat[:limit] + ("…" if len(flat) > limit else "")
 
 
+def milestone_rows(root: Path | None = None) -> list[str]:
+    """The milestone table for the magazine's front page, taken from MILESTONES.md rather than computed again.
+
+    One computation, two renderings — the defect this project keeps paying for is a second copy of a fact. If
+    the file is not there, the front page says nothing about milestones rather than inventing a section for them.
+    """
+    p = (root or HERE) / "MILESTONES.md"
+    if not p.exists():
+        return []
+    keep, out = False, ["## What this circle has reached", ""]
+    for ln in p.read_text(encoding="utf-8").splitlines():
+        if ln.startswith("| when |"):
+            keep = True
+        if keep:
+            if not ln.startswith("|"):
+                break
+            out.append(ln)
+    if len(out) <= 2:
+        return []
+    return out + ["", "The whole list, and the file each line came from: [`MILESTONES.md`](../MILESTONES.md).", ""]
+
+
 def issue_index() -> str:
     """`issues/README.md` — the index, rebuilt from the issues on disk.
 
@@ -769,11 +791,138 @@ def issue_index() -> str:
         "python3 magazine.py --ledger         # works, answers given and received, debts, reads",
         "```",
         "",
+        *(rows if (rows := milestone_rows(HERE)) else []),
         "**One wart, undecided.** The issue number belongs to the repository, not to a world, so two colonies "
         "share it: the title line names both. It should probably belong to the colony, the way a magazine "
         "belongs to a town.",
         "",
     ])
+
+
+def work_label(path: Path) -> str:
+    """A work's own title, from its header, or its file name made readable. The filer truncates names at 60
+    characters (`ten-portraits-of-me-and-the-reason-i-keep-the-li`), and a milestone line is read by a person."""
+    try:
+        for ln in path.read_text(encoding="utf-8").splitlines()[:8]:
+            m = re.match(r"title:\s*(.+)", ln)
+            if m:
+                return m.group(1).strip()
+    except OSError:
+        pass
+    return path.stem.split("-", 1)[-1].replace("-", " ")
+
+
+def milestones(root: Path | None = None) -> str:
+    """What this circle has actually reached, derived from its own files.
+
+    The founder asked on 2026-11-19 how a milestone gets into "the list of Milestones on the magazine home
+    page". The honest answer then was that no such list existed anywhere — the milestone was prose in
+    FINDINGS.md, which is the bench's own argument and not a circle's record. A list typed by a person would
+    go stale the way every typed copy in this project has gone stale, so this one is read out of the record:
+    the first member, the first wake that reached an engine, the first work on the shelf, the first piece that
+    answered another, the first job a person retired. Each line names the file it came from, and a first that
+    has not happened yet is not listed at all.
+
+    Firsts and not counts, because a count is a number to argue with and a first is a fact with a date on it.
+    """
+    root = root or HERE
+    members = sorted(p for p in (root / "wake" / "members").glob("*") if (p / "state").is_dir())
+    marks: list[tuple[str, str, str]] = []          # (date, what, evidence)
+
+    def first_line(path: Path, pattern: str) -> tuple[str, str] | None:
+        if not path.exists():
+            return None
+        for ln in path.read_text(encoding="utf-8").splitlines():
+            m = re.search(pattern, ln)
+            if m:
+                return m.group(1), ln.strip()
+        return None
+
+    # The first member whose journal carries a dated entry, and the first wake in the circle that reached an
+    # engine: `(api)` in the heading is how a wake labels a call that actually happened.
+    born, woke = [], []
+    for m in members:
+        j = m / "state" / "journal.md"
+        got = first_line(j, r"^##\s*(\d{4}-\d{2}-\d{2})")
+        if got:
+            born.append((got[0], m.name, str(j.relative_to(root))))
+        thought = first_line(j, r"^##\s*(\d{4}-\d{2}-\d{2})(?=.*\(api\)|.*—.*\(api\))")
+        if thought:
+            woke.append((thought[0], m.name, str(j.relative_to(root))))
+    if born:
+        d, who, f = min(born)
+        marks.append((d, f"the first member existed — {who}", f))
+    if woke:
+        d, who, f = min(woke)
+        marks.append((d, f"the first wake reached an engine — {who} thought without anyone there", f))
+
+    # The shelf: works are named `<UTC stamp>-<title>.md`, so the earliest name is the first piece filed.
+    shelf = sorted((root / "works").glob("*/*.md")) if (root / "works").is_dir() else []
+    stamped = [(mm.group(1), w) for w in shelf if (mm := re.match(r"(\d{8})T", w.name))]
+    if stamped:
+        day, w = min(stamped, key=lambda x: x[1].name)
+        d = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
+        marks.append((d, f"the first work reached the shelf — {w.parent.name}'s *{work_label(w)}*",
+                      str(w.relative_to(root))))
+
+    # The first answer under another piece: a work whose header carries a `ref:` to a peer's file.
+    answered = []
+    for w in shelf:
+        try:
+            text = w.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # `ref: -` is how the filer writes "it answered nothing", and counting it would put every first piece
+        # on the list as an answer to another one.
+        if re.search(r"^ref:\s*(?![-~]\s*$|none\s*$)\S", text, re.M | re.I) and (mm := re.match(r"(\d{8})T", w.name)):
+            answered.append((mm.group(1), w))
+    if answered:
+        day, w = min(answered, key=lambda x: x[1].name)
+        d = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
+        marks.append((d, f"the first piece answered another — {w.parent.name}'s *{work_label(w)}*",
+                      str(w.relative_to(root))))
+
+    # The first job a person handed over and then retired. `done.md` is written by the page and never by the
+    # member, so its oldest line is the oldest act of a person closing a chore.
+    retired = []
+    for m in members:
+        p = m / "state" / "done.md"
+        if not p.exists():
+            continue
+        for ln in p.read_text(encoding="utf-8").splitlines():
+            mm = re.match(r"-\s*(\d{4}-\d{2}-\d{2})\s*—\s*item\s*(\d+):\s*(.+)", ln)
+            if mm:
+                retired.append((mm.group(1), m.name, mm.group(2), mm.group(3).strip()[:90],
+                                str(p.relative_to(root))))
+    if retired:
+        d, who, n, what, f = min(retired)
+        marks.append((d, f"the first job was handed over and retired — {who}, item {n}: {what}", f))
+
+    # The first picture made for a piece.
+    plates = [p for p in (root / "plates").glob("*") if p.suffix.lower() in
+              {".png", ".jpg", ".jpeg", ".gif", ".webp"}] if (root / "plates").is_dir() else []
+    dated = [(mm.group(1), p) for p in plates if (mm := re.match(r"(\d{8})T", p.name))]
+    if dated:
+        day, p = min(dated, key=lambda x: x[1].name)
+        d = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
+        marks.append((d, f"the first picture was made for a piece — {p.name}", str(p.relative_to(root))))
+
+    issues = sorted(x.name for x in (root / "issues").glob("*.md") if x.stem[:1].isdigit()) \
+        if (root / "issues").is_dir() else []
+
+    lines = ["# Milestones", "",
+             "_Computed from this circle's own files on "
+             + datetime.now(timezone.utc).strftime("%Y-%m-%d") + ". Nothing here is typed by a person, and a "
+             "first that has not happened is not on the list; each row names the file it was read from._", ""]
+    if marks:
+        lines += ["| when | what | the file that proves it |", "|---|---|---|"]
+        for d, what, f in sorted(marks, key=lambda x: x[0]):
+            lines.append(f"| {d} | {what} | `{f}` |")
+    else:
+        lines.append("Nothing yet. The list starts with the first member.")
+    lines += ["", f"**Counted, not claimed:** {len(members)} member(s), {len(shelf)} work(s) on the shelf, "
+                  f"{len(issues)} issue(s) published, {len(plates)} picture(s) in `plates/`.", ""]
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -791,6 +940,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--project", default="", help="one member's works in order — the long view")
     ap.add_argument("--index", action="store_true", help="every named project, who is building it, what came last")
     ap.add_argument("--ledger", action="store_true", help="one row per member: works, answers, debts, reads")
+    ap.add_argument("--milestones", action="store_true",
+                    help="what this circle has actually reached, derived from its own files")
     ap.add_argument("--projects", action="store_true", help="every member's timeline; with --write, PROJECTS.md")
     ap.add_argument("--links", action="store_true",
                     help="who answered whom this issue, and which members have not answered anyone")
@@ -870,6 +1021,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.write:
             (HERE / "LEDGER.md").write_text(text, encoding="utf-8")
             print("wrote LEDGER.md")
+        else:
+            print(text, end="")
+        return 0
+
+    if args.milestones:
+        text = milestones(HERE)
+        if args.write:
+            (HERE / "MILESTONES.md").write_text(text, encoding="utf-8")
+            print("wrote MILESTONES.md")
         else:
             print(text, end="")
         return 0

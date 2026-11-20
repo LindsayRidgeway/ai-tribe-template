@@ -38,6 +38,7 @@ import math
 import os
 import random
 import re
+import shutil
 import sys
 import time
 from dataclasses import dataclass, field
@@ -86,6 +87,11 @@ COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 NET_ABSORBS = 0.08         # the fraction of its own speed a ball rebounds off the tape with
 NET_DROP = 0.25            # and of its vertical speed, before gravity takes the rest
 OUT_SECONDS = 1.5          # how long the picture may watch a ball that landed out bounce away
+PLAY_AREA = 12.0           # ft beyond each line a player can be and still be on the ground: the run-off. A ball that
+                           # has left it is a ball nobody can return, and the picture draws `VISIBLE_PAD` so the edge
+                           # of the ground is visible before the ball reaches it. Added 2026-11-19 (Item 17): without
+                           # it the interception chased a serve 25ft behind the baseline and a foot outside the
+                           # sideline, and the rally then played itself further off the court, shot by shot.
 VISIBLE_PAD = 22.0         # feet beyond each line the court picture still shows, so a ball leaving frame is not
                            # followed into the dark and does not stretch the shot by walking there
 
@@ -518,6 +524,18 @@ def aim_at(p: Player, target, shot: str, surface: str, wind, power: float, at=No
 # where an overhead stops being an overhead and a ball stops being returnable at all.
 RACQUET_REACH = 7.0
 RACQUET_HIGH = 9.0
+# The height a player chooses to hit at, as opposed to the height they can touch the ball at. Between the knee and
+# the shoulder: below it they let the ball come up or scrape it, above it this game has no overhead (movement list
+# item 3). Added with the meeting point (Item 16, 2026-11-19): the first slice a ball is within reach of a player
+# is usually a foot off the ground, so "where the racquet meets the ball" and "where the ball is touchable" were
+# the same number and two groundstrokes in five were struck at 0.0ft.
+CONTACT_HEIGHT = 3.0                  # ft above the court: the waist, which is the height a player moves their
+                                      # feet to meet the ball at. Not the height they can touch it at. Since Item 18
+                                      # (2026-11-19) it is the FLOOR of the band rather than the point to aim at.
+CONTACT_HIGH = 7.0                    # ft: the top of the band, a shoulder and a bit. Above this a groundstroke is
+                                      # a smash, and this game has no smash yet (movement list item 3), so the
+                                      # interception does not choose a contact up there even though a racquet can
+                                      # reach it (`RACQUET_HIGH` = 9.0).
 STEP = 0.02                           # s; the slice the ball's plan is stepped in, and why a miss is measured in tenths
 # Two costs that are not distance and that the first version of this rule ignored entirely. A player does not
 # leave on the opponent's contact: they split-step, read the ball, and are moving a quarter of a second later.
@@ -541,6 +559,7 @@ REACTION_BASE = 0.26     # seconds, for a player who has never played
 REACTION_SKILL = 0.15    # of that, taken off by proficiency (`skill("reach")`)
 SETTLE = 0.20
 SERVE_MPH = (66.0, 18.0)  # a first serve, spread; scaled down by control so a beginner does not serve like a pro
+RETURN_DEPTH = 4.0        # ft behind the baseline a returner stands. Not the baseline: see `play_point`.
 PREP_TIME = 0.55         # seconds to take the racquet back, for a player who does not overlap it with the run.
                          # A player who does overlap them needs max(run, prep) instead of run + prep: that is
                          # `Player.rush`, and it is the reason the same ball is a different ball at 0 balls
@@ -646,7 +665,21 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
     vz = abs(vz)                        # a hand-written record can carry the pre-bounce sign; the ball goes up
     t = 0.0
     best = None                         # (shortfall, dx, dy, t, ball point) at the closest the player ever got
+    # Where the ball is a ball to hit, which is not the same question as where it can be touched (Item 16,
+    # 2026-11-19). The first version returned at the first 0.02s slice the ball was within a racquet's length, and
+    # for a ball coming at you from a bounce that slice is a foot off the ground: measured on the shipped film,
+    # two groundstrokes in five were struck at 0.0ft and the median contact was 1.8ft. A player does not hit a ball
+    # at ground level when they have the time — they wait for it to come up, or take it on the rise at a height
+    # they chose. So the meeting point is a slice that is both within reach AND inside the hitting band, falling
+    # back — when the ball never gets up into the band — to the highest point it did offer (a skidding ball is
+    # scraped, and that is a real shot), and then to the first slice it was touchable at all.
+    ok_at = None                        # the first slice the player could reach at all
+    zone_at = None                      # the in-band slice they have to move least for (waist to shoulder)
+    near_at = None                      # the reachable slice nearest the waist, for a ball that never gets up
     while t <= 4.0:
+        # there is a finite amount of ground, and a ball that has left it has gone past everybody
+        if (not (-PLAY_AREA <= x <= LENGTH + PLAY_AREA) or not (-PLAY_AREA <= y <= WIDTH + PLAY_AREA)):
+            break
         if z <= RACQUET_HIGH:           # a ball above nine feet is not intercepted, it is smashed — later
             gap = math.hypot(hx - x, hy - y)
             # the ground is covered from a standstill, and the split step is charged before it starts
@@ -656,11 +689,25 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
             if best is None or short < best[0]:
                 best = (short, hx - x, hy - y, t, (x, y, z))
             if short <= 0.0:
-                return {"ok": True, "need": need, "have": have, "short": 0.0, "short_ft": 0.0,
-                        "run_time": max(0.0, need - SETTLE),
-                        "dx": hx - x, "dy": hy - y, "speed": speed, "at": flight_time + t,
-                        "meet": (round(x, 3), round(y, 3), round(z, 3)), "gap": gap,
-                        "got": _run_to((hx, hy), (x, y), max(0.0, gap - reach)), "why": ""}
+                slice_ = (need, have, t, x, y, z, gap)
+                if ok_at is None:
+                    ok_at = slice_
+                # THE BAND, not a point (Item 18, 2026-11-19). Item 16 chose the reachable slice whose height was
+                # nearest the waist, and a ball crosses the waist twice — on the way up, in front of the player, and
+                # on the way down, behind them. Both are equally near 3.0ft, so the tie went to whichever the scan
+                # met last, and the scan runs the whole ball: measured, a player ran ten feet BACKWARDS to meet a
+                # ball that had bounced fourteen feet in FRONT of them. Height alone cannot break that tie, so the
+                # band breaks it by travel: anywhere between the waist and the shoulder is a ball to hit, and among
+                # those the player takes the one they have to move least for. Taking the earliest in-band slice
+                # instead was tried and is wrong in the other direction — it sends them sprinting forward at a ball
+                # that was coming to them, and 220 shots came out of a twenty-point film instead of 110.
+                if CONTACT_HEIGHT <= z <= CONTACT_HIGH:
+                    if zone_at is None or gap < zone_at[6]:
+                        zone_at = slice_
+                elif near_at is None or abs(z - CONTACT_HEIGHT) < abs(near_at[5] - CONTACT_HEIGHT):
+                    # the fallback for a ball that never comes up — a skid is scraped, and scraping it at the
+                    # highest point it offered is a better description than scraping it where it was first touchable
+                    near_at = slice_
         if t > 0.0 and z <= 0.0:        # the second bounce: the ball is dead and the chance has gone
             break
         rel = math.sqrt(vx * vx + vy * vy + vz * vz)
@@ -668,6 +715,24 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
         x, y, z = x + vx * STEP, y + vy * STEP, z + vz * STEP
         vx, vy, vz = vx + ax * STEP, vy + ay * STEP, vz + az * STEP
         t += STEP
+
+    if zone_at is not None or near_at is not None or ok_at is not None:
+        need, have, t_hit, xh, yh, zh, gap_h = zone_at or near_at or ok_at
+        return {"ok": True, "need": need, "have": have, "short": 0.0, "short_ft": 0.0,
+                "run_time": max(0.0, need - SETTLE),
+                "dx": hx - xh, "dy": hy - yh, "speed": speed, "at": flight_time + t_hit,
+                "meet": (round(xh, 3), round(yh, 3), round(zh, 3)), "gap": gap_h,
+                "got": _run_to((hx, hy), (xh, yh), max(0.0, gap_h - reach)), "why": "",
+                "height": round(zh, 3)}
+
+    if best is None:
+        # The ball never spent a single slice inside the ground a player can stand on: it is past the run-off, and
+        # nobody plays it from there. Not a miss and not a mistake — the picture has to say so in words, so this is
+        # a sentence rather than a `short` of zero, which would read as "reached it" with no feet under it.
+        return {"ok": False, "need": 0.0, "have": 0.0, "short": 0.0, "short_ft": 0.0, "run_time": 0.0,
+                "dx": 0.0, "dy": 0.0, "speed": speed, "at": flight_time, "meet": (round(x, 3), round(y, 3), 0.0),
+                "gap": math.hypot(hx - x, hy - y), "got": (round(hx, 3), round(hy, 3)),
+                "why": "past the back of the court", "height": 0.0}
 
     short, dx, dy, t_best, ball = best
     short_ft = short * speed
@@ -684,7 +749,7 @@ def interception(p: Player, land, flight_time: float, bounce: dict, surface: str
             "short": short, "short_ft": short_ft, "run_time": asked,
             "dx": dx, "dy": dy, "speed": speed,
             "at": flight_time + t_best, "meet": ball, "gap": math.hypot(dx, dy),
-            "got": _run_to((hx, hy), ball, allowed), "why": why}
+            "got": _run_to((hx, hy), ball, allowed), "why": why, "height": round(ball[2], 3)}
 
 
 def _run_to(frm, to, ground: float):
@@ -728,6 +793,82 @@ def season_paths(season: str, override: str | None = None, sport: str = "tennis"
     return d, d / "practice.json"
 
 
+def season_is_closed(book: dict) -> str:
+    """The reason this season takes no more sessions, or "" if it does.
+
+    The founder asked on 2026-11-19 why the sessions recorded before the practice/competition rule were not
+    simply thrown away. Not thrown away, and not kept as if they were comparable either: CLOSED. This project's
+    own reset has always been a new directory rather than a wipe — a season is a folder, and starting over is
+    opening another one, which is why last spring stays readable while the next one runs. Closing is that, made
+    explicit and enforceable, so a closed season cannot acquire a session nobody can classify and the reader is
+    never asked to remember which half of a file the rule applies to."""
+    c = book.get("closed")
+    if not c:
+        return ""
+    if isinstance(c, dict):
+        return (f"closed {c.get('when', 'at an unrecorded time')}"
+                + (f" — {c['why']}" if c.get("why") else ""))
+    return f"closed ({c})"
+
+
+def refuse_if_closed(args, book) -> bool:
+    """Stop a session that would land in a closed season, and say where it should go instead.
+
+    One function for both producers, for the reason this file keeps having to write: a rule enforced in one of two
+    places is a rule the other one breaks. Returns True when the session was refused."""
+    if book is None:
+        return False
+    why = season_is_closed(book)
+    if not why:
+        return False
+    print(f"   {args.season}: {why}. Nothing was played. Open a new season under a new `--season` name — the "
+          f"closed one stays readable and unchanged.", file=sys.stderr)
+    return True
+
+
+def cast_of(season: str, override: str | None = None, sport: str = "tennis") -> dict:
+    """The season's people, from its appearance file — who they are and which group they play in.
+
+    `setup.json` is the page's appearance file, and it is now also the only place a rule can read a group from:
+    a `sex` field per player, explicit, because there is no other fact in these files that is about a person
+    rather than about a skirt. A member the file does not name has no group, and that is a refusal to compete
+    rather than a default — see `may_compete`. 2026-11-19."""
+    d, _ = season_paths(season, override, sport)
+    f = d / "setup.json"
+    if not f.exists():
+        return {}
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for p in data.get("players", []):
+        if not p.get("name"):
+            continue
+        out[p["name"]] = {"sex": str(p.get("sex") or "").strip().lower(), **(p.get("look") or {})}
+    return out
+
+
+def may_compete(a: str, b: str, cast: dict) -> tuple[bool, str]:
+    """Whether these two may play a competition, and if not, the sentence that says why.
+
+    The founder, 2026-11-19: *"always same-sex competition, same or mixed sex practice."* So the rule is one
+    line and the interesting part is what happens when a group is unknown: a competition nobody can place in a
+    group is not one, so an unnamed group is refused by name rather than treated as equal to whatever is across
+    the net. A default here would be a rule that silently decides somebody's group for them."""
+    sa, sb = cast.get(a, {}).get("sex", ""), cast.get(b, {}).get("sex", "")
+    if not sa or not sb:
+        miss = [n for n, v in ((a, sa), (b, sb)) if not v]
+        verb = "has" if len(miss) == 1 else "have"
+        return False, (f"{' and '.join(miss)} {verb} no group in this season's setup.json, and a competition "
+                       f"that cannot be placed in a group is not one. Add a `sex` field there, or play a "
+                       f"practice")
+    if sa != sb:
+        return False, (f"{a} is in the {sa} group and {b} in the {sb} group, and competition is same-sex; "
+                       f"practice may pair anybody")
+    return True, ""
+
+
 def load_season(season: str, override: str | None = None, sport: str = "tennis") -> dict:
     d, f = season_paths(season, override, sport)
     if not f.exists():
@@ -747,7 +888,8 @@ def save_season(book: dict, season: str, override: str | None = None, sport: str
 
 
 def record_session(book: dict, *, when: str, surface: str, clock: int, players, results, lengths,
-                   partners: dict, mode: str = "rally") -> None:
+                   partners: dict, mode: str = "rally", competition: bool = None,
+                   by: str = "a person") -> None:
     """Add one session to the book. The balls are the ones the ENGINE counted, not the ones a member
     claims — a being that inflates its own practice should be findable in the record, and here it cannot
     inflate it at all."""
@@ -757,6 +899,14 @@ def record_session(book: dict, *, when: str, surface: str, clock: int, players, 
         m = book["members"].setdefault(p.name, {"balls": 0, "sessions": []})
         m["sessions"].append({
             "when": when, "surface": surface, "clock": clock, "mode": mode,
+            # WAS IT A COMPETITION, and WHO STARTED IT. The founder asked for staggered automatic play that one
+            # of each sex can be made to skew by pairing particular players by hand, and a season cannot show
+            # that unless the file distinguishes the two. `mode` already means what KIND of session (rallies,
+            # fed balls, the person's seat), so competition is its own field rather than a fourth value of one
+            # that the report already sorts on. A session recorded before 2026-11-19 has no `competition` key
+            # at all, and the report says so instead of guessing. 2026-11-19.
+            **({"competition": bool(competition)} if competition is not None else {}),
+            "by": by,
             "with": partners.get(p.name, []),
             "shots": p.shots, "in_play": sum(r), "of": len(r),
             "mean_rally": round(sum(lengths) / len(lengths), 2) if lengths else 0.0,
@@ -777,7 +927,8 @@ def practice_of(book: dict, name: str) -> int:
     return int(m.get("balls", 0)) + int(m.get("carried", 0))
 
 
-def seed_practice(book: dict, values: dict[str, int], when: str) -> list[tuple[str, int]]:
+def seed_practice(book: dict, values: dict[str, int], when: str,
+                  by: str = "a person, before this member had a record here") -> list[tuple[str, int]]:
     """Give a member a history, once, before it has one in this season.
 
     The founder asked, 2026-11-12, whether a person may put a number into a member instead of waiting for the
@@ -795,8 +946,7 @@ def seed_practice(book: dict, values: dict[str, int], when: str) -> list[tuple[s
             continue
         entry = m or book["members"].setdefault(name, {"balls": 0, "sessions": []})
         entry["carried"] = int(entry.get("carried", 0)) + int(n)
-        entry["seeded"] = {"when": when, "balls": int(n),
-                           "by": "a person, before this member had a record here"}
+        entry["seeded"] = {"when": when, "balls": int(n), "by": by}
         applied.append((name, int(n)))
     return applied
 
@@ -820,6 +970,11 @@ def season_report(season: str, override: str | None = None, sport: str = "tennis
     out = [f"# {season} — what the record says", "",
            f"From `{shown}`, opened {book.get('opened') or 'unknown'}. Every number below is computed from "
            f"the sessions listed in that file; nothing here is written from memory.", ""]
+    closed = season_is_closed(book)
+    if closed:
+        out += [f"**{season} is {closed}.** It is history: it takes no more sessions, its numbers are not "
+                f"comparable with a season played under later rules, and nothing in it has been changed to make "
+                f"it look like one. The games after it are in the next season.", ""]
     for name in sorted(book["members"]):
         m = book["members"][name]
         # A point from the person's seat is a session like any other in the file — it counts its balls, it
@@ -844,6 +999,36 @@ def season_report(season: str, override: str | None = None, sport: str = "tennis
                        + ".")
         else:
             out.append("- No balls hit in this season yet.")
+        # WHAT WAS PLAYED, AND WHO SAID SO. The founder, 2026-11-19, wants a season that can play itself and can
+        # also be shaped by a person pairing particular players by hand — so the record has to distinguish them,
+        # and the report has to print the two totals apart. A session recorded before the rule existed carries
+        # neither field, and saying so is the only honest answer: a default here would invent a fact.
+        comp = [x for x in ss if x.get("competition") is True]
+        prac = [x for x in ss if x.get("competition") is False]
+        older = [x for x in ss if "competition" not in x]
+        if comp or prac or older:
+            line = ""
+            if comp or prac:
+                bits = []
+                if comp:
+                    bits.append(f"{len(comp)} competition{'' if len(comp) == 1 else 's'}")
+                if prac:
+                    bits.append(f"{len(prac)} practice{'' if len(prac) == 1 else 's'}")
+                line = f"- {' and '.join(bits)}"
+                hands: dict[str, int] = {}
+                for x in ss:
+                    if x.get("by"):
+                        hands[x["by"]] = hands.get(x["by"], 0) + 1
+                if hands:
+                    line += ("; started by "
+                             + ", ".join(f"{k} ({v}x)" for k, v in sorted(hands.items(), key=lambda kv: -kv[1])))
+            if older:
+                tail = (f"{len(older)} session{'' if len(older) == 1 else 's'} "
+                        f"{'is' if len(older) == 1 else 'are'} older than the rule that records whether a "
+                        f"session was a competition and who started it, and "
+                        f"{'says' if len(older) == 1 else 'say'} nothing about either")
+                line = (line + ". " + tail) if line else f"- {tail}"
+            out.append(line + ".")
         if person_points:
             pp_in = sum(s["in_play"] for s in person_points)
             pp_of = sum(s["of"] for s in person_points)
@@ -1247,8 +1432,19 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
     the hitter back (or in, after an approach) before the next ball is chosen. That position is what `interception`
     is asked about, so the runner starts where their legs actually left them."""
     lines, where = [], {}
-    for p in (server, receiver):
-        where[p.name] = (2.0 if p.north else LENGTH - 2.0, WIDTH / 2)
+    # The server's feet are on the baseline, not two feet inside it: a serve struck from inside the court is a foot
+    # fault, and the ball is struck 2.2ft in front of the feet (Item 16, 2026-11-19 — `contact_point` used to answer
+    # this with a fixed point two feet inside the line whatever the server was doing, and the ball was launched
+    # 2.2ft further forward than that as soon as the launch point followed the body).
+    where[server.name] = (0.0 if server.north else LENGTH, WIDTH / 2)
+    # The returner stands BEHIND the baseline, not on it. This was one line for both, two feet inside the line, and
+    # that is not where anybody returns from: a returner is on the back foot with the ball coming at them, and the
+    # two feet matter because a serve arriving in half a second is decided by feet, not by reach. Measured on 120
+    # real serves at 600 balls (`/tmp/stance19.py`, 2026-11-19): reached from 2ft inside the line 89% of the time,
+    # from the line 93%, from 4ft behind it 97%, from 6ft behind it 98%. The same 120 serves at 300 balls:
+    # 94 / 97 / 98 / 99%. The stance is not a tuned knob — it is the one thing the engine had wrong about the whole
+    # shape of a return — so it is set where a returner stands and the numbers are left to fall where they fall.
+    where[receiver.name] = (-RETURN_DEPTH if receiver.north else LENGTH + RETURN_DEPTH, WIDTH / 2)
     record = {}                                  # corner histories: empty per point, so the backhand rule decides
     last: dict[str, tuple | None] = {server.name: None, receiver.name: None}
 
@@ -1268,10 +1464,16 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
     # returns whatever face sends the ball into the corner at the pace it was given, so twenty serves are not a
     # metronome. What changed is which of the two numbers the player is deciding.
     pace = (SERVE_MPH[0] + SERVE_MPH[1] * rng.random()) * (0.72 + 0.30 * server.skill("control"))
-    face, power = aim_at(server, c, "serve", surface, wind_vec, power=pace)
-    _p0 = contact_point(server, "serve")
+    # The ball is struck in front of the server's own feet (Item 16, 2026-11-19). `contact_point` answered with a
+    # point two feet inside the baseline and up to five feet off centre, whatever the server was doing, so the
+    # launch was from a place no player was standing. The numbers here are the producer's
+    # (`lab/tennis_script.py`), which the film has used since 2026-11-19: 2.2ft in front of the feet and a foot to
+    # the side, 8.8ft up — high enough that the serve is struck over the net rather than into it.
+    _sx, _sy = where[server.name]
+    _p0 = (_sx + 2.2 * (1.0 if server.north else -1.0), _sy + 1.1, 8.8)
+    face, power = aim_at(server, c, "serve", surface, wind_vec, power=pace, at=_p0)
     shot = strike(server, None, face=face, power=power, aim=c[1], shot="serve", surface=surface, wind=wind_vec,
-                  trace=0.02, aim_dist=math.hypot(c[0] - _p0[0], c[1] - _p0[1]))
+                  trace=0.02, at=_p0, aim_dist=math.hypot(c[0] - _p0[0], c[1] - _p0[1]))
     server.serves += 1
     lines.append(line_for(shot, receiver.name, surface, wind_in))
     t = shot["traj"]
@@ -1280,7 +1482,8 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
         lines.append(f"fault — the point goes to {receiver.name}.")
         return lines
     server.serves_in += 1
-    where[server.name] = (2.0 if server.north else LENGTH - 2.0, WIDTH / 2)
+    # and after the serve they are behind the line, where a server recovers — the same spot `recovery_spot` uses
+    where[server.name] = (-RECOVER_DEPTH if server.north else LENGTH + RECOVER_DEPTH, WIDTH / 2)
     incoming = t["bounce"]
     incoming["speed_in"] = t["bounce"]["speed_out"] / MPH
 
@@ -1306,7 +1509,10 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
                 lines.append(f"{receiver.name} is {m['why']} — {server.name} takes the point.")
                 server.winners += 1
                 return lines
-            incoming["rush"] = receiver.rush(min(m["run_time"], t["time"]), t["time"])
+            # The time they had is the time to the *contact*, not the time to the bounce: since Item 16 the ball is
+            # met where a player meets it, which is usually after it has come up, and a player who waits for a ball
+            # has that much longer to get the racquet back. Passing `t["time"]` kept charging them for time they had.
+            incoming["rush"] = receiver.rush(min(m["run_time"], m["at"]), m["at"])
         if vol is not None:
             where[receiver.name] = vol["feet"]
             at = vol["contact"]
@@ -1314,7 +1520,14 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
             # a volley is the ball you have least time for, and the record should be able to say so
             incoming["rush"] = receiver.rush(vol["step"] / max(movement_speed(receiver), 1.0), vol["t"])
         else:
-            at = None
+            # The ball is struck where the ball was (Item 16, 2026-11-19). `contact_point` put every groundstroke at
+            # two feet inside the baseline and the middle of the court, so a player who had run twenty feet to reach
+            # it struck it from where they were not. `meet` is the interception's own point — the first slice of the
+            # ball's life at which it is within a racquet's length — so the launch height is the ball's real height:
+            # a ball scraped off the ground is a low ball here for the first time, and the face search has to hit up
+            # from it. The film has done this since 2026-11-19 (`lab/tennis_script.py`, `carry[hitter]`); this is the
+            # scoreline catching up with the picture.
+            at = m["meet"]
             kind = rng.choice(["forehand", "backhand", "backhand", "forehand"])
         plan = choose_shot(receiver, server, where[receiver.name], where[server.name], record, rng,
                            height=vol["height"] if vol else None, last=last[receiver.name])
@@ -1384,8 +1597,12 @@ def verdict(shot: dict) -> tuple[bool, str]:
         how = "less than a foot" if over < 1 else f"{over:.0f}ft"
         return False, f"long by {how}{side} — too much height or too much pace"
     if not (0 <= y <= WIDTH):
-        return False, (f"wide by {abs(lat) - WIDTH / 2:.0f}ft — the court is 27ft wide, "
-                       f"aim between 4 and 23")
+        # the same rule the long ball follows: below a foot, say so rather than rounding it to nothing. A caption
+        # reading "wide by 0ft" (seen on `film-2026-11-19.json` after Item 16, 2026-11-19) says a ball is out and
+        # then reports that it is zero feet out, which is the kind of number a player cannot learn from.
+        out_by = abs(lat) - WIDTH / 2
+        how = "less than a foot" if out_by < 1 else f"{out_by:.0f}ft"
+        return False, f"wide by {how} — the court is 27ft wide, aim between 4 and 23"
     return True, (f"IN, {depth:.0f}ft past the net, {abs(lat):.0f}ft {'east' if lat > 0 else 'west'} of centre, "
                   f"arrives at {t['speed_in'] / MPH:.0f}mph and comes up at "
                   f"{t['bounce']['speed_out'] / MPH:.0f}mph")
@@ -1798,6 +2015,11 @@ def run_rally(args) -> int:
                       else vendors_of(names)), len(names), "--vendor")
     # The season wins over `--practice`, and says so: two sources for one number is the defect this project
     # has fixed twice. Here the file is the record and the flag is a test hook.
+    ok, code = settle_pairing(args, names)
+    if not ok:
+        return code
+    if args.season and refuse_if_closed(args, load_season(args.season, args.season_dir)):
+        return 2
     book, practice = open_book(names, args)
     models = spread(([m.strip() for m in args.model.split(",")] if args.model
                      else [default_model(v) for v in vendors]), len(names), "--model")
@@ -1867,7 +2089,7 @@ def run_rally(args) -> int:
     if book is not None:
         when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         record_session(book, when=when, surface=surface, clock=ms, players=players, results=results,
-                       lengths=lengths,
+                       lengths=lengths, competition=(args.mode == "compete"), by=args.by,
                        partners={a.name: [b.name] for a, b in ((players[0], players[1]),
                                                               (players[1], players[0]))})
         f = save_season(book, args.season, args.season_dir)
@@ -1878,6 +2100,142 @@ def run_rally(args) -> int:
         print(f"\n  season {args.season}: written to {shown} - "
               + ", ".join(f"{p.name} {practice_of(book, p.name)} balls this season" for p in players))
         print(f"  next: python3 lab/tennis.py --report {args.season}")
+    return 0
+
+
+def settle_pairing(args, names: list[str]) -> tuple[bool, int]:
+    """Decide whether these two may play what `--mode` says they are playing, and say so.
+
+    Both producers call this before a ball is hit, because a rule enforced in one of two producers is a rule the
+    other one breaks — the same sentence this file has had to write about the season file winning over a flag, and
+    about there being one vendor table. Returns (ok, exit code). 2026-11-19."""
+    mode = (getattr(args, "mode", "compete") or "compete").strip().lower()
+    if mode not in ("compete", "practice"):
+        print(f"   --mode is compete or practice; it was {mode!r}. Nothing was played.", file=sys.stderr)
+        return False, 2
+    if mode == "practice" or not getattr(args, "season", None):
+        return True, 0
+    cast = cast_of(args.season, args.season_dir)
+    ok, why = may_compete(names[0], names[1], cast)
+    if not ok:
+        print(f"   {why}. Nothing was played.", file=sys.stderr)
+        return False, 2
+    return True, 0
+
+
+class FilmedPlayer:
+    """Enough of a player for `record_session` and nothing more: a name, a number of balls, and the three
+    skills the report prints, all taken from the film's own players block.
+
+    This exists because the two halves of a session live in two files. `lab/tennis_script.py` plays the film and
+    knows what each player actually did; `record_session` writes the season and asks `Player` objects for their
+    skill, because on the rally path the same objects played the balls. Handing the film's *record* to the
+    season's *writer* is the point: a session the user watched and a session the members played are one shape of
+    fact, and neither should be able to invent a number the other cannot check. 2026-11-19."""
+
+    def __init__(self, row: dict, shots: int):
+        self.name = row["name"]
+        self.shots = shots
+        self._row = row
+
+    def skill(self, which: str) -> float:
+        return float(self._row[which])
+
+
+def run_watch(args) -> int:
+    """One session, twice over: played as a film, and recorded as a season.
+
+    The founder, 2026-11-19, on what "an integral part of Kythe" means: *"for the user to be able to watch a video
+    of the same players, at their current skill levels, practice or compete together... The results from your video
+    game would then feed into Dmitri's seasonal data the same as if his own calculations had simulated the same
+    game."*
+
+    So this is the seam. Until today there were two tennis games and they only shared an engine:
+
+      * `--rally` asks each member's engine for a shot line, plays it, and writes `practice.json`;
+      * `lab/tennis_script.py` plays the same engine into a film record, and wrote nothing back.
+
+    A member could practise all season and the film would never know, and the film could be watched all night and
+    the season would never move. Here the film reads its players' practice OUT of the season file and writes the
+    session it played back INTO it, through the one writer (`record_session`) the rally path also uses. The numbers
+    that go in are the film's own — each shot's `in` flag, each rally's length — not a re-count and not a claim.
+
+    What is deliberately NOT here: any model. A film is played by nobody's words, so `--vendor` and `--model` are
+    refused rather than ignored; and because the film is a function of the clock, two runs of one clock are one
+    film, which is what makes the page's film a rendering of the season rather than a second game beside it."""
+    names = [n.strip() for n in args.names.split(",")]
+    if len(names) != 2:
+        print("   --watch takes two names, one per side of the net. Nothing was played.", file=sys.stderr)
+        return 2
+    if args.vendor or args.model:
+        print("   --vendor and --model mean nothing on --watch: a film is played by the engine, not by a member. "
+              "Use --rally for a session the members play, or drop the flags. Nothing was played.",
+              file=sys.stderr)
+        return 2
+
+    ok, code = settle_pairing(args, names)
+    if not ok:
+        return code
+    # Before open_book and not after it: open_book is where `--seed` writes a carried history, and a closed
+    # season must not acquire one either. A refusal that arrives after the write is not a refusal.
+    if args.season and refuse_if_closed(args, load_season(args.season, args.season_dir)):
+        return 2
+    book, practice = open_book(names, args)
+    ms = args.clock if args.clock is not None else int(time.time() * 1000)
+    surface = args.surface or surface_at(ms)
+    if book is None:
+        print(f"  no --season, so this film is not recorded anywhere: {names[0]} {practice[0]} balls, "
+              f"{names[1]} {practice[1]} balls, from the flags. Nothing will be added to a season.")
+    else:
+        print(f"  the film is played at these two players' current skill, read from season {args.season}: "
+              + ", ".join(f"{n} {b} balls" for n, b in zip(names, practice)))
+
+    # Imported here and not at the top: `tennis_script` imports this file for the engine, so a module-level
+    # import in this direction would be a circle. The dependency is real and one-way at call time.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import tennis_script as S
+
+    data = S.play(tuple(practice), tuple(names), args.rallies, ms, surface, args.swap_every,
+                  season=args.season)
+
+    print(f"\n# the film — {surface}, wind {data['wind']['direction']} {data['wind']['mph']:.0f}mph, "
+          f"{args.rallies} rallies, clock {ms}\n")
+    lens = [r["length"] for r in data["rallies"]]
+    for n in names:
+        mine = [s for s in data["shots"] if s["player"] == n]
+        inn = sum(1 for s in mine if s["in"])
+        print(f"  {n}: {len(mine)} shots, in play {inn}/{len(mine)} = "
+              f"{inn / max(1, len(mine)) * 100:.0f}%")
+    print(f"  rallies: {len(lens)}   mean {sum(lens) / max(1, len(lens)):.1f}   longest {max(lens) if lens else 0}")
+    print(f"  the lengths, in order: {' '.join(str(x) for x in lens)}")
+
+    if book is None:
+        return 0
+
+    d, _ = season_paths(args.season, args.season_dir)
+    target = d / "watch.json"
+    d.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(data, indent=1), encoding="utf-8")
+
+    # The session the film just played, written by the season's one writer. `results` is the film's own `in`
+    # flag per shot and `lengths` its own rally lengths, so there is no second count that could disagree.
+    results = {n: [bool(s["in"]) for s in data["shots"] if s["player"] == n] for n in names}
+    lengths = list(lens)
+    played = [FilmedPlayer(row, len(results[row["name"]])) for row in data["players"]]
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    record_session(book, when=when, surface=surface, clock=ms, players=played, results=results,
+                   lengths=lengths, competition=(args.mode == "compete"), by=args.by,
+                   partners={a: [b] for a, b in ((names[0], names[1]), (names[1], names[0]))})
+    f = save_season(book, args.season, args.season_dir)
+    try:
+        shown = f.relative_to(ROOT)
+    except ValueError:
+        shown = f
+    print(f"\n  season {args.season}: written to {shown} — "
+          + ", ".join(f"{p.name} {practice_of(book, p.name)} balls this season" for p in played))
+    print(f"  the film: {target.relative_to(ROOT) if target.is_relative_to(ROOT) else target}")
+    print(f"  watch it: games/tennis/replay3d.html?record=seasons/{args.season}/watch.json")
+    print(f"  next: python3 lab/tennis.py --report {args.season}")
     return 0
 
 
@@ -2022,7 +2380,8 @@ def run_person(args) -> int:
 
     if book is not None:
         record_session(book, when=when, surface=surface, clock=ms, players=players, results=results,
-                       lengths=lengths, partners={who: [opponent], opponent: [who]}, mode="person")
+                       lengths=lengths, partners={who: [opponent], opponent: [who]}, mode="person",
+                       competition=False, by="a person")
         f = save_season(book, args.season, args.season_dir)
         d, _ = season_paths(args.season, args.season_dir)
         note = unique_path(d / "points" / f"{when}.md")
@@ -2160,6 +2519,249 @@ def simulate_rally(args, ms: int | None = None, quiet: bool = False) -> dict:
     return out
 
 
+def plan_of(book: dict) -> dict:
+    """Who is due how many sessions this season.
+
+    The founder, 2026-11-19, asked for *"intentionally staggered automatic play (practice/compete) time within each
+    group"*. That sentence is a schedule, so it lives in the season file as a `plan` block rather than in a
+    paragraph of `CAST.md` — prose does not fail and a plan does. `members` is each person's target number of
+    sessions; `sessions` is the season's own length, which is the same number only by coincidence."""
+    p = book.get("plan") or {}
+    return {
+        "sessions": int(p.get("sessions") or 0),
+        "members": {k: int(v) for k, v in (p.get("members") or {}).items() if v},
+        "rallies": int(p.get("rallies") or 20),
+        "note": str(p.get("note") or ""),
+    }
+
+
+def sessions_played(book: dict) -> dict[str, int]:
+    """Sessions each member has actually played, not counting the person's seat — a point somebody played from
+    the page is not an evening, which is the distinction the report already makes."""
+    return {n: sum(1 for s in m.get("sessions", []) if s.get("mode") != "person")
+            for n, m in (book.get("members") or {}).items()}
+
+
+def next_session(book: dict, cast: dict) -> tuple[str, str, str]:
+    """Who plays next, and whether it is a competition. Returns ("", "", "") when there is nothing to play.
+
+    The rule is deliberately arithmetic and has no rng in it, because the random stream belongs to the tennis: a
+    schedule that drew lots would make the season's ranking partly a lottery, and the point of staggering the play
+    time is that the ranking is the schedule's doing and can be checked against it.
+
+    1. whoever is furthest behind their target plays;
+    2. their opponent is the next-most-behind member OF THE SAME GROUP — a competition, since competition is
+       same-sex;
+    3. if nobody in their group is behind, the pair is a practice with the next-most-behind member of the other
+       group, because practice may pair anybody;
+    4. if nobody else is behind at all, nothing is due and the season is complete.
+
+    Ties break by name. Not by rng, and not by dict order, which is a coin toss nobody wrote down."""
+    plan = plan_of(book)
+    targets = plan["members"]
+    if not targets:
+        return "", "", ""
+    played = sessions_played(book)
+    due = {n: targets.get(n, 0) - played.get(n, 0) for n in targets}
+    behind = sorted(((n, d) for n, d in due.items() if d > 0), key=lambda nd: (-nd[1], nd[0]))
+    if not behind:
+        return "", "", ""
+    a = behind[0][0]
+    group = cast.get(a, {}).get("sex", "")
+    same = [n for n, _ in behind if n != a and group and cast.get(n, {}).get("sex") == group]
+    if same:
+        return a, same[0], "compete"
+    other = [n for n, _ in behind if n != a]
+    if other:
+        return a, other[0], "practice"
+    return "", "", ""
+
+
+SEASON_START_BALLS = 20
+
+
+def seasons_on_disk(base: Path | str | None = None, sport: str = "tennis") -> list[tuple[str, dict]]:
+    """Every season on disk, newest opening first. A season is a directory and nothing else is one."""
+    base = Path(base) if base else (SEASONS if sport == "tennis" else ROOT / "games" / sport / "seasons")
+    if not base.is_dir():
+        return []
+    found = []
+    for d in sorted(p for p in base.iterdir() if p.is_dir()):
+        f = d / "practice.json"
+        if not f.exists():
+            continue
+        try:
+            found.append((d.name, json.loads(f.read_text(encoding="utf-8"))))
+        except json.JSONDecodeError:
+            continue
+    found.sort(key=lambda nb: (str(nb[1].get("opened") or ""), nb[0]), reverse=True)
+    return found
+
+
+def clock_season(base: Path | str | None = None, when: str | None = None,
+                 sport: str = "tennis") -> tuple[str, str]:
+    """Which season an unattended clock plays in, opening the next one if every season has closed.
+
+    The founder, 2026-11-19: *"Dmitri's game still function for live but off-screen playing and during wakes."*
+    A season that closes and is never replaced is a game that stopped, and the last two seasons here were closed
+    by their own rules (one played its plan out; one was recorded before the cast rule existed). So the clock
+    opens the next one rather than waiting for somebody to type a name — but it opens it the only way this design
+    allows: a NEW directory, the same cast, the same plan, and every member starting level.
+
+    Level, and not carried forward, is a decision with a measurement behind it. `Player.skill()` is strictly
+    increasing and asymptotic, so six members carried into a second season would start 0.001 apart and end 0.001
+    apart — the ranking would be over before the first ball, and "one of each sex best, one worst" would be true
+    of every season equally and therefore of none. Starting level is what lets the stagger do the deciding, which
+    is the thing the founder asked the stagger to do.
+
+    Returns (season, a sentence saying how it was chosen). ("", reason) when there is nothing to copy a cast
+    from — a clock with no cast does not invent one.
+    """
+    found = seasons_on_disk(base, sport)
+    for name, book in found:
+        if season_is_closed(book):
+            continue
+        if not plan_of(book)["members"]:
+            # An open season with no plan is a person's season: this clock has no rule to pick a session by, and
+            # inventing one would overwrite somebody's evening with a schedule.
+            continue
+        return name, f"the newest open season is {name}"
+    with_plan = [(n, b) for n, b in found if plan_of(b)["members"]]
+    if not with_plan:
+        return "", ("no season on disk has a plan, so there is no cast or schedule to open the next one from; "
+                    "play a session by hand first")
+    base_dir = Path(base) if base else (SEASONS if sport == "tennis" else ROOT / "games" / sport / "seasons")
+    src_name, src = with_plan[0]
+    src_setup = base_dir / src_name / "setup.json"
+    if not src_setup.exists():
+        return "", (f"{src_name} has a plan but no setup.json, so the clock cannot build the same cast again; "
+                    f"a competition that cannot be placed in a group is not one")
+    plan = plan_of(src)
+    stamp = when or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    name = stamp[:10]
+    taken = {n for n, _ in found}
+    stem, i = name, 2
+    while name in taken:
+        name, i = f"{stem}-{i}", i + 1
+    book = {
+        "season": name,
+        "opened": stamp,
+        "note": (f"opened by the clock from {src_name}: the same cast and the same plan, and every member "
+                 f"starting with {SEASON_START_BALLS} balls of history rather than where the last season left "
+                 f"them, because a season that began where the last one ended would be decided before it was "
+                 f"played"),
+        "plan": {"sessions": plan["sessions"], "rallies": plan["rallies"],
+                 "members": dict(plan["members"]), "by": f"the clock, from {src_name}"},
+        "members": {},
+    }
+    for n, k in seed_practice(book, {m: SEASON_START_BALLS for m in plan["members"]}, stamp,
+                              by="the clock, opening the season"):
+        print(f"  {n}: starts this season with {k} balls — recorded as carried, not as hit here")
+    save_season(book, name, str(base_dir / name), sport)
+    shutil.copyfile(src_setup, base_dir / name / "setup.json")
+    return name, f"every season had closed, so the clock opened {name} from {src_name}'s cast and plan"
+
+
+def run_schedule(args) -> int:
+    """Play one session of a season, chosen by the schedule rather than by a person.
+
+    This is the half of the founder's cast instruction that is not a rule: *"If no human runs play/practice
+    sessions, automatic play one of each sex should become best and one of each sex should be come worse."* The
+    staggered plan is in the season file; this reads it, decides the next pair, plays it as a film (so the season
+    stays watchable while it plays itself), and closes the season when the plan is done — which is what stops a
+    season acquiring an eighth session or a ranking nobody can attribute."""
+    if not args.season:
+        # No season named: the clock chooses, and opens the next one if every season has closed. This is the only
+        # path that is allowed to create a season, and it creates it from the last one's cast and plan — never
+        # from nothing, which is why a colony that has never played a session gets a sentence instead of a file.
+        base = Path(args.season_dir).parent if args.season_dir else None
+        name, why = clock_season(base)
+        if not name:
+            print(f"\n  the clock has no season to play in: {why}. Nothing was played.")
+            return 0
+        args.season = name
+        if args.season_dir:
+            args.season_dir = str(Path(args.season_dir).parent / name)
+        print(f"\n# {why}")
+    book = load_season(args.season, args.season_dir)
+    why = season_is_closed(book)
+    if why:
+        print(f"   {args.season}: {why}. Nothing was played.", file=sys.stderr)
+        return 2
+    plan = plan_of(book)
+    if not plan["members"]:
+        print(f"   {args.season} has no plan block, so there is no schedule to play. Add "
+              f"`plan: {{members: {{name: sessions}}}}` or play a session by hand. Nothing was played.",
+              file=sys.stderr)
+        return 2
+    cast = cast_of(args.season, args.season_dir)
+    played = sessions_played(book)
+    due = {n: plan["members"].get(n, 0) - played.get(n, 0) for n in plan["members"]}
+    print(f"\n# the schedule — {args.season}, {plan['sessions'] or '?'} sessions, "
+          f"{plan['rallies']} rallies each\n")
+    for n in sorted(plan["members"], key=lambda k: (-due[k], k)):
+        print(f"  {n:9s} {cast.get(n, {}).get('sex', 'no group'):8s} "
+              f"{played.get(n, 0)} of {plan['members'][n]} played"
+              + (f"   — {due[n]} to go" if due[n] > 0 else "   — done"))
+    a, b, mode = next_session(book, cast)
+    if not a:
+        print(f"\n  every member has played its sessions. The season is complete; closing it.")
+        return close_season(args.season, args.season_dir,
+                            "the plan's sessions are all played: the season is complete", by=args.by)
+    print(f"\n  next: {a} and {b}, a {mode} — the two furthest behind"
+          + (f" in the {cast.get(a, {}).get('sex')} group" if mode == "compete" else "\n"))
+
+    # The plan owns the session shape. `--rallies` is not consulted here, because a schedule that could be
+    # shortened by a flag is a schedule nobody can reproduce.
+    args.names = f"{a},{b}"
+    args.mode = mode
+    args.by = "the schedule"
+    args.rallies = plan["rallies"]
+    code = run_watch(args)
+    if code != 0:
+        return code
+
+    after = load_season(args.season, args.season_dir)
+    left = {n: plan["members"][n] - sessions_played(after).get(n, 0) for n in plan["members"]}
+    if all(v <= 0 for v in left.values()):
+        return close_season(args.season, args.season_dir,
+                            "the plan's sessions are all played: the season is complete",
+                            by="the schedule")
+    print(f"\n  the plan has {sum(max(0, v) for v in left.values())} session(s) left: "
+          + ", ".join(f"{n} {max(0, v)}" for n, v in sorted(left.items()) if v > 0))
+    return 0
+
+
+def close_season(season: str, override: str | None, why: str, by: str = "a person") -> int:
+    """Close a season: it keeps every number it has and takes no more.
+
+    The founder, 2026-11-19: *"Why don't you just discard that data?"* Because discarding is the one thing this
+    design does not do — a season is a directory and starting over is opening another one, so that what was played
+    stays readable. But a season recorded before a rule existed is not comparable with the seasons after it, and
+    pretending otherwise is worse than either keeping or deleting. So: close it, say why, and start the next one.
+    The file is written once and never edited again; `closed` is a fact about the season, not a switch."""
+    book = load_season(season, override)
+    if not book.get("members"):
+        print(f"   there is no season {season} to close: no file, or no members in it.", file=sys.stderr)
+        return 2
+    already = season_is_closed(book)
+    if already:
+        print(f"   {season}: {already}. Nothing was changed.")
+        return 0
+    book["closed"] = {"when": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      "by": by, "why": why}
+    f = save_season(book, season, override)
+    try:
+        shown = f.relative_to(ROOT)
+    except ValueError:
+        shown = f
+    print(f"  {season} is closed — {why}")
+    print(f"  the record: {shown} ({len(book['members'])} members, "
+          f"{sum(m.get('balls', 0) for m in book['members'].values())} balls hit in it)")
+    print(f"  it takes no more sessions. The next one opens under its own name.")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="tennis: the player moves, the system computes the ball")
     ap.add_argument("--names", default="Colette,Remy")
@@ -2172,6 +2774,15 @@ def main(argv=None) -> int:
                     help="their engines; read from each member's voice.md when blank")
     ap.add_argument("--model", default=None)
     ap.add_argument("--temperature", type=float, default=1.0)
+    ap.add_argument("--mode", default="compete", choices=("compete", "practice"),
+                    help="compete (the default) is same-sex only, read from the season's setup.json; practice "
+                         "pairs anybody, in either group. The founder, 2026-11-19: 'always same-sex competition, "
+                         "same or mixed sex practice'. A competition between two members whose group the season "
+                         "does not state is refused by name rather than defaulted")
+    ap.add_argument("--by", default="a person",
+                    help="who started this session, written into the record beside the numbers so a season a "
+                         "person hand-shaped can be told from one that played itself. A schedule passes "
+                         "'--by \'the schedule\''")
     ap.add_argument("--shots", type=int, default=40, help="for --drill: balls to hit")
     ap.add_argument("--drill", action="store_true", help="early spring: balls fed one at a time, no scoring")
     ap.add_argument("--person-shot", default=None,
@@ -2181,6 +2792,13 @@ def main(argv=None) -> int:
                          "written beside the season's other records")
     ap.add_argument("--rally", action="store_true", help="early spring: rallies that last until someone misses")
     ap.add_argument("--rallies", type=int, default=20, help="for --rally: how many rallies to play")
+    ap.add_argument("--watch", action="store_true",
+                    help="play a session as a FILM and record it in the season: the same engine, no member asked. "
+                         "Reads the players' practice out of practice.json and writes the session it played back "
+                         "into it, so a film and a live rally are one shape of fact. Writes "
+                         "games/tennis/seasons/<season>/watch.json, which the page can fetch")
+    ap.add_argument("--swap-every", type=int, default=None,
+                    help="for --watch: points at one end before both players change ends (0 never)")
     ap.add_argument("--clock", type=int, default=None,
                     help="pin the clock, and with it the surface, the wind and the hands a player was born with "
                          "(a test hook: replaying one match against a different opponent is the only way to see "
@@ -2194,11 +2812,25 @@ def main(argv=None) -> int:
                     help="balls a member brings into a season it has not played yet, one per player, e.g. "
                          "'300,0'. Recorded as carried, never as hit here. Ignored for a member that already "
                          "has a record in this season: the file wins over the flag")
+    ap.add_argument("--schedule", action="store_true",
+                    help="play the next session a season's plan says is due: whoever is furthest behind plays "
+                         "the next-most-behind of their own group, as a film, recorded `by: the schedule`. When "
+                         "the plan is done the season closes itself. With no --season it plays the newest "
+                         "season still open, and opens the next one from the last one's cast and plan when "
+                         "they have all closed — which is what runs unattended")
+    ap.add_argument("--close-season", default=None, metavar="SEASON",
+                    help="close a season: keep every number, take no more sessions. The next one is a new "
+                         "`--season`, which is how this design has always reset — a season is a directory")
+    ap.add_argument("--why", default="", help="for --close-season: the sentence the record will carry")
     ap.add_argument("--report", default=None, metavar="SEASON",
                     help="print what the season file says, with its own citations, and claim nothing more")
     ap.add_argument("--simulate", action="store_true",
                     help="two scripted learners, to test whether the drill's feedback is learnable at all")
     args = ap.parse_args(argv)
+    if args.schedule:
+        return run_schedule(args)
+    if args.close_season:
+        return close_season(args.close_season, args.season_dir, args.why or "closed by a person", args.by)
     if args.report:
         print(season_report(args.report, args.season_dir))
         return 0
@@ -2210,6 +2842,11 @@ def main(argv=None) -> int:
         return 0
     if args.rally:
         return run_rally(args)
+    if args.watch:
+        import tennis_script as _S
+        if args.swap_every is None:
+            args.swap_every = _S.SWAP_EVERY
+        return run_watch(args)
     if args.drill:
         return run_drill(args)
     if args.person_shot is not None:

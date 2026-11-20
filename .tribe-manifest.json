@@ -21,6 +21,7 @@
   "lab/paint.py",
   "lab/rps.py",
   "lab/tennis.py",
+  "lab/tennis_script.py",
   "lab/update_tribe.py",
   "magazine.py",
   "outbox.py",

@@ -28,15 +28,20 @@ on:
         required: false
         default: ""
   schedule:
-    - cron: "17 */4 * * *"    # every four hours, on the 17th minute
-    # Measured 2026-11-03: this cron did not fire at 01:17 UTC while `heartbeat.yml` — hourly, and edited
-    # two minutes before its due minute — fired at 01:46. The clock has fired once in its whole history
-    # (05:57 on 2026-11-02, forty minutes late) and has been edited on nearly every day since, which is a
-    # suspicious pairing: GitHub re-registers a schedule when the file changes, and this file has changed
-    # more than any other. The edit that carries this comment is the experiment — if the 05:17 UTC turn
-    # now arrives, the fault was the registration and the fix is to touch this file; if 05:17 goes by with
-    # no run while the heartbeat keeps beating, the fault is in this workflow, and the next suspect is the
-    # concurrency group above.
+    - cron: "17 */4 * * *"    # every four hours, on the 17th minute — and, in practice, never on it
+    # Measured 2026-11-20 over eight consecutive due slots (11-17 00:17Z through 11-19 20:17Z): every slot
+    # produced exactly one run, and every run was LATE — 43, 57, 65, 95, 154, 165, 187 and 192 minutes
+    # after its due time, median about two hours. Not one was dropped on this repository. On the founder's circle,
+    # where this file has not been touched since it was created, two of three due turns arrived (66 and 89
+    # minutes late) and 20:17Z on 11-19 never came at all.
+    # So the fault is neither the registration nor this file: GitHub queues `schedule` events and runs them
+    # when the pool has room, and documents that they can be delayed under load. Nothing written here can
+    # make a scheduled workflow punctual. What the product may claim is "it wakes on its own, within a few
+    # hours of the time you set"; what it may never claim is "at :17". A hard guarantee needs an external
+    # trigger holding a fine-grained token — a dependency and a secret, the last resort and not the first.
+    # (Superseded, kept because it was believed for two weeks: the 2026-11-03 note that suspected GitHub
+    # re-registered a schedule when its file changed. It rested on a single 01:17Z miss; eight clean slots
+    # falsify it, and the lateness above explains the miss without any re-registration at all.)
 
 # Two turns at once touch the same member files, so the second one's rebase conflicts on a journal and the
 # whole turn is discarded — measured on 2026-11-02 when two clock runs were fired together: one green, one
@@ -218,6 +223,11 @@ jobs:
           python3 magazine.py --projects --write >> /tmp/clock.log 2>&1 || true
           python3 magazine.py --index --write >> /tmp/clock.log 2>&1 || true
           python3 magazine.py --ledger --write >> /tmp/clock.log 2>&1 || true
+          # What the circle has actually reached, derived from its own files: the first member, the first wake
+          # that reached an engine, the first work, the first answer, the first job a person retired. On the
+          # magazine's front page as well, so a reader meets the record before the prose. Added 2026-11-19, when
+          # the founder asked how a milestone gets into that list — the answer was that no such list existed.
+          python3 magazine.py --milestones --write >> /tmp/clock.log 2>&1 || true
           tail -40 /tmp/clock.log
 
       - name: Commit the clock

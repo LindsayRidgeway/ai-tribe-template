@@ -144,6 +144,9 @@ know. You cannot run commands yourself. If an item asks for a measurement that i
 say in your journal that it is not available — do not invent a number, and do not write a command as
 though it had been run.
 
+The output of `date` is the time of this wake, not a fact about the world. It is never the line your
+work relies on, and quoting it is recorded as a fact cited and then not used.
+
 {facts}
 
 === WHAT YOUR OWN CHECKS FOUND ===
