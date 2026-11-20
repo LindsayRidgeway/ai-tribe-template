@@ -224,12 +224,12 @@ request. What you may not do is claim you were never asked.
 {asked}
 
 === WHAT YOU MUST DO NOW ===
-Decide what this wake is for. Three things can claim it, and all three are legitimate:
+Decide what this wake is for. Four things can claim it, and all four are legitimate:
 
 - **your beat** — what you are interested in, which is yours and which nobody assigned;
 - **a request addressed to you** — somebody asked you for something in writing, quoted above;
 - **a peer's work** — on the shelf above, answerable without being asked;
-- **an open item** — the chores. They are real and they are the lowest of the three: do them when
+- **an open item** — the chores. They are real and they are the lowest of the four: do them when
   nothing else claims you, and say so.
 
 A wake that produces only commentary has failed. Your act must be a file you write. Do not do what the
@@ -238,7 +238,7 @@ last wake did because it is easier; do the thing that is yours to do now.
 Reply with JSON only, exactly this shape, no prose before or after:
 
 {{
-  "source": "beat, peer, item, or soil — which of the three claimed this wake",
+  "source": "beat, peer, item, or soil — which of those claimed this wake",
   "chosen_item": "what you acted on: the number and words of an item, or the peer work you answered, or the line of your beat",
   "why": "one sentence, concrete, naming what in the state made you choose it",
   "form": "one word for what you are making: piece, letter, game, catalogue, rules, note, sketch",
