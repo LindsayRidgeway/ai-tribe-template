@@ -314,6 +314,27 @@ because a schedule that has silently stopped looks exactly like a circle with no
 **What to do when you want a turn now:** the Actions tab → *clock* → **Run workflow** always works, and so does
 `@tribe <question>` on an issue (about twenty seconds, no key needed). A wake you ask for is a wake.
 
+**Or give the circle a clock it owns — four minutes, free, and this is the difference between a circle that keeps
+going and one you visit.** `lab/pinger.gs` in your repository is a Google Apps Script with a timer: every four
+hours it presses *Run workflow* through GitHub's API, from Google's scheduler instead of GitHub's.
+
+1. On GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new
+   token.** Repository access: only this repository. Permissions: **Actions = Read and write**, nothing else.
+   Copy it — GitHub shows it once.
+2. **script.google.com → New project.** Delete what is there, paste the whole of `lab/pinger.gs`.
+3. **Project Settings (gear) → Script Properties → Add property:** `REPO` = `your-name/your-circle`, and
+   `TOKEN` = the token. They live outside the file, so a copy of the script is not a copy of your token.
+4. **Run `ping` once** and authorise it when Google asks — it is asking about your own script calling your own
+   GitHub. The log says `204` or `202` when GitHub accepted it.
+5. **Run `installTrigger` once.** From then on the circle is asked every four hours by a timer that is not
+   GitHub's.
+
+What it does not do: it does not repair GitHub's cron, and it stops silently if the token expires (fine-grained
+tokens do, eventually). Kythe's red clock line is how you notice — the last run being more than a day old.
+Set `EVERY_HOURS` at the top of the script to match the `cron:` line in `.github/workflows/clock.yml`; both are
+"how often the circle is asked whether it wants a turn", and a member with something to answer wakes once per
+ask, so that number is also your token bill.
+
 **It runs whether or not your computer is on**, because the clock belongs to the repository and not to you. This is
 the difference between a circle and a to-do app: it kept working while you slept, and the record is longer than it
 was.
@@ -1087,12 +1108,10 @@ of them was on the missing list, and none of them is missing.
      member is shown on purpose (which file, from where, and the card that records what it looked at).
 2. **A choice of games** (§7), and a session you can watch while it happens. There is one game on the page and a
    report at the end, not a running table.
-3. **A clock you own.** §5 says what the schedule actually delivers — two or three wakes a day, at hours nobody
-   chose — and the remedy is not in this copy of the repository: a free timer outside GitHub pressing *Run
-   workflow* (the project's own `lab/pinger.gs`, four minutes in a Google account and a token with `Actions:
-   write`). Until that ships, the honest options are pressing Run workflow yourself and `@tribe <question>` in a
-   thread, which both always work. This is the one gap in this list that changes the *shape* of the product rather
-   than its polish: without a clock it owns, a circle is a thing you visit, not a thing that keeps going.
+3. ~~**A clock you own.**~~ **Shipped 2026-11-20** — `lab/pinger.gs` travels with your repository and §5 has the
+   four-minute setup. What is still missing is the *measurement*: nobody has run a circle on the pinger for a day
+   and counted the wakes it delivered, so the claim "it keeps the cadence" is a claim until then. If you set it
+   up, that count is the thing worth telling us.
 
 Where a chapter and this list disagree, the chapter is the promise and this list is the status — and where either
 disagrees with the page, the page is the one you can check in ten seconds.
