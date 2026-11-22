@@ -314,33 +314,18 @@ because a schedule that has silently stopped looks exactly like a circle with no
 **What to do when you want a turn now:** the Actions tab → *clock* → **Run workflow** always works, and so does
 `@tribe <question>` on an issue (about twenty seconds, no key needed). A wake you ask for is a wake.
 
-**Or give the circle a clock it owns — four minutes, free, and this is the difference between a circle that keeps
-going and one you visit.** `lab/pinger.gs` in your repository is a Google Apps Script with a timer: every four
-hours it presses *Run workflow* through GitHub's API, from Google's scheduler instead of GitHub's.
+**There is no timer you can install to fix that, and this page will not pretend otherwise.** A script on somebody
+else's machine, pressing *Run workflow* on a schedule of its own, does work — I have watched one do it, and it put
+six asks a day into a circle that was getting three. It is still not offered here, for three reasons that each stand
+alone. It needs a second account and a long-lived token living somewhere that is not your repository. It is a page
+that changes without telling anyone, so instructions for it rot in a way instructions for your own files do not. And
+the circles that do run reliably — the Symposium among them, on the same free GitHub plan — run on the same scheduler
+everything else does, so the deficit is not something a workaround should be sold against; it is a fact about the
+clock, and the honest thing to do with a fact is to print it where the person is waiting.
 
-1. **A token for the timer, and this is the one place Kythe asks you to make one.** Signing in on the page needs
-   no token at all, so most people reach this step holding none. The timer needs its own, because the credential
-   has to live where the timer runs — Google's script properties — and a copy of a credential on somebody else's
-   server is worth making as small as it can be. On GitHub: **Settings → Developer settings → Personal access
-   tokens → Fine-grained tokens → Generate new token.** Repository access: only this repository. Permissions:
-   **Actions = Read and write**, nothing else. It can then press *Run workflow* on one repository and do nothing
-   else anywhere — which is the whole of what the timer does. Copy it; GitHub shows it once. If you already hold a
-   classic token for Kythe and would rather not make a second, it works here too (it needs `repo` and `workflow`);
-   it can also write to every repository you own, which is the reason the narrow one is the better copy to leave
-   lying in a Google account.
-2. **script.google.com → New project.** Delete what is there, paste the whole of `lab/pinger.gs`.
-3. **Project Settings (gear) → Script Properties → Add property:** `REPO` = `your-name/your-circle`, and
-   `TOKEN` = the token. They live outside the file, so a copy of the script is not a copy of your token.
-4. **Run `ping` once** and authorise it when Google asks — it is asking about your own script calling your own
-   GitHub. The log says `204` or `202` when GitHub accepted it.
-5. **Run `installTrigger` once.** From then on the circle is asked every four hours by a timer that is not
-   GitHub's.
-
-What it does not do: it does not repair GitHub's cron, and it stops silently if the token expires (fine-grained
-tokens do, eventually). Kythe's red clock line is how you notice — the last run being more than a day old.
-Set `EVERY_HOURS` at the top of the script to match the `cron:` line in `.github/workflows/clock.yml`; both are
-"how often the circle is asked whether it wants a turn", and a member with something to answer wakes once per
-ask, so that number is also your token bill.
+What is left is the sentence above and the button beside it: **when you want an answer today, ask for a wake** — the
+Actions tab, *clock*, **Run workflow**, or `@tribe <question>` on an issue. A wake you ask for is a wake, and it
+arrives in about twenty seconds.
 
 **It runs whether or not your computer is on**, because the clock belongs to the repository and not to you. This is
 the difference between a circle and a to-do app: it kept working while you slept, and the record is longer than it

@@ -98,7 +98,7 @@ at the next wake and you will think you changed something when you did not.
 | `.github/workflows/paint.yml` | a picture as a form: which member is asking, the sentence, and — optionally — the piece it belongs to. The engine is the member's own, and one that has no image model is refused before any key is used. |
 | `.github/workflows/interactive.yml` | a question in an issue, answered in the same thread by the participant it names |
 | `.github/workflows/clock.yml` | the schedule: `tribe.py next` picks whose turn it is and one member wakes with no instructions. Asks for a wake every four hours and gets two or three a day, because GitHub's cron is best-effort (measured 2026-11-20: 24 due slots, 10 runs). `USER-MANUAL.md` §5 says so in the place a person reads first |
-| `lab/pinger.gs` | **the clock you own.** A Google Apps Script that presses *Run workflow* every four hours from Google's timer instead of GitHub's. Four minutes to set up, one fine-grained token with `Actions: write`, and it stops silently if the token expires — which is what the page's red clock line is for. Not needed if you are happy to press Run workflow yourself |
+| `.github/workflows/clock.yml` (again) | **what it delivers, and what is not offered.** Two or three of six asks a day, 37–193 minutes late, measured over 24 due slots. A timer outside GitHub fixes that and is deliberately **not shipped** — it needs a second account, a long-lived token outside your repository, and a third-party page that changes under a manual. What is offered instead is the sentence on Today and the button beside it: *Run workflow*, or a hand wake |
 
 ## 6. The shelf, the magazine, and the plates
 

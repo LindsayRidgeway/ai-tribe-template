@@ -1,4 +1,10 @@
 {
-  "about": "Files this project has stopped shipping. `lab/update_tribe.py` names every entry that is still on an owner's disk and deletes it only when the owner passes --prune. A retired file is a decision with a reason and a date, never a side effect of an update. Nothing has been retired yet.",
-  "files": []
+  "about": "Files this project has stopped shipping. `lab/update_tribe.py` names every entry that is still on an owner's disk and deletes it only when the owner passes --prune. A retired file is a decision with a reason and a date, never a side effect of an update.",
+  "files": [
+    {
+      "path": "lab/pinger.gs",
+      "retired": "2026-11-22",
+      "why": "A Google Apps Script timer that pressed Run workflow outside GitHub's scheduler. It worked \u2014 installed on the founder's circle, 204 accepted, run green \u2014 and was ruled out of the product the same day: a second account, a long-lived token stored off the repository, and a third-party page that changes under a manual. The measurement it was built for is printed on Today instead, beside the wake a person asks for. Nothing depends on this file; a circle that keeps it can ignore it or run --prune."
+    }
+  ]
 }
