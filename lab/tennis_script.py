@@ -24,6 +24,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tennis as T  # noqa: E402
 
 CAP = 60          # the record's ceiling on a rally, stated rather than hidden
+# The second serve, as two numbers rather than as a phrase in a comment, because the rate they produce is measurable
+# and is the whole point of a second serve: it exists to go IN. Pace is a fraction of the first serve's; the target
+# moves nearer the middle of the box.
+#
+# Measured 2026-11-20 over 20 points between two beginners (20 balls each), same seed, changing only these two:
+#
+#     0.86 / +2ft     first serve in 45%   second serve in 53%   doubles 7 of 15
+#     0.74 / +4ft     first serve in 45%   second serve in 55%   doubles 5 of 11     <- these
+#     0.62 / nine ft  first serve in 50%   second serve in 30%   doubles 7 of 10
+#
+# So slowing it down does NOT make it safe, and slows it into something worse: the faults are mostly a ball hit on
+# the frame (`strike` takes half the pace off and throws the face eight degrees out when the sweet spot is missed),
+# and no amount of care in the aiming removes a shanked ball. What went down at 0.62 is the *aimed* serve: a slower
+# ball aimed deep needs more loft than the search can find and comes back as its own kind of fault. The numbers are
+# kept here because "make the second serve slower" is the obvious move and it is measurably the wrong one.
+SECOND_SERVE_PACE = 0.74
+SECOND_SERVE_INSET = 9.0
 TRACE = 0.02      # seconds between ball positions in the script
 SWAP_EVERY = 5    # points at one end before both players change ends, so neither is always the small one
 WALK = 4.6        # ft/s between points. A recovery jog is 8-20ft/s and a change of ends is not a jog: people
@@ -338,6 +355,13 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
         # a rally ends when a shot is out (the hitter loses it) or when the other player cannot reach a good one
         # (the hitter wins it). If it runs to the cap, nobody won it and the record says so.
         point = {"winner": None, "reason": "the rally ran to the cap without a result"}
+        # TWO SERVES, one at a time. Until 2026-11-20 there was only one, and a serve that missed was recorded as a
+        # "double fault" — a false sentence in the record and a point that never happened: a double fault is two
+        # misses. The founder asked for the second serve to be held until the rules existed (2026-11-12); the rules
+        # now do, and thirteen of the twenty points of a clock-played session were ending on the first ball, which is
+        # not a film anybody watches. The second serve is the same intention with less pace and more margin, which
+        # is what a second serve is for.
+        serves_left = 2
         while length < CAP:
             p = players[hitter]
             other = players[1 - hitter]
@@ -352,6 +376,7 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
             toss_pts = []                        # a serve gets one; nothing else does
             serving = (hitter == server_i and not rallied)
             if serving:
+                second_serve = serves_left == 1
                 # ONE SERVE, until the game's own rules exist. A first serve that misses used to earn a second one,
                 # and the second serve is the ball that puts the rally in play — so the film spent the first shot
                 # of most points on a ball that was meant to fail. The founder, 2026-11-12: "You start a lot of
@@ -365,8 +390,13 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
                 sx, sy = where[hitter]
                 contact = (sx + 2.2 * (1.0 if p.north else -1.0), sy + 1.1, 8.8)
                 pace = (T.SERVE_MPH[0] + T.SERVE_MPH[1] * rng.random()) * (0.72 + 0.30 * p.skill("control"))
-                target = (T.NET_X + (T.SERVICE_LINE - 5.0) * (1.0 if p.north else -1.0),
-                          T.WIDTH / 2 + (6.0 if serve_corner[1] > T.WIDTH / 2 else -6.0))
+                # A second serve is the same corner with less pace and more room: 14% slower and aimed two feet
+                # further inside the line, because a serve that misses twice is a point given away and every server
+                # at every level knows it. Nothing else about the plan changes — the corner is still this point's.
+                if second_serve: pace *= SECOND_SERVE_PACE
+                inset = (SECOND_SERVE_INSET if second_serve else 5.0)
+                target = (T.NET_X + (T.SERVICE_LINE - inset) * (1.0 if p.north else -1.0),
+                          T.WIDTH / 2 + ((4.0 if second_serve else 6.0) if serve_corner[1] > T.WIDTH / 2 else -(4.0 if second_serve else 6.0)))
                 face, pw = T.aim_at(p, target, "serve", surface, wv, power=pace, at=contact)
                 shot = T.strike(p, None, face=face, power=pw, aim=target[1],
                                 aim_dist=abs(target[0] - contact[0]), shot="serve",
@@ -466,7 +496,18 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
             idxs.append(entry["n"])
 
             if not ok:
+                if serving and serves_left > 1:
+                    # A FIRST FAULT IS NOT A POINT. The ball is watched out, the record keeps it as a serve that
+                    # missed, and the server serves again — the loop simply starts another pass with the same
+                    # hitter, because `serving` is `hitter == server_i and not rallied` and neither has changed.
+                    # The recovery block below is skipped on purpose: a server who has just missed does not walk to
+                    # the middle of the baseline, they serve again from where they are.
+                    serves_left -= 1
+                    entry["fault"] = "first serve"
+                    watch_out(entry, other, traj, where[1 - hitter], serving, where, 1 - hitter)
+                    continue
                 if serving:
+                    entry["fault"] = "second serve"
                     point = {"winner": other.name, "reason": f"double fault — {why}"}
                 else:
                     point = {"winner": players[1 - hitter].name, "reason": why}

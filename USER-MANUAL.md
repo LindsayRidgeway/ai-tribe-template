@@ -318,9 +318,16 @@ because a schedule that has silently stopped looks exactly like a circle with no
 going and one you visit.** `lab/pinger.gs` in your repository is a Google Apps Script with a timer: every four
 hours it presses *Run workflow* through GitHub's API, from Google's scheduler instead of GitHub's.
 
-1. On GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new
-   token.** Repository access: only this repository. Permissions: **Actions = Read and write**, nothing else.
-   Copy it — GitHub shows it once.
+1. **A token for the timer, and this is the one place Kythe asks you to make one.** Signing in on the page needs
+   no token at all, so most people reach this step holding none. The timer needs its own, because the credential
+   has to live where the timer runs — Google's script properties — and a copy of a credential on somebody else's
+   server is worth making as small as it can be. On GitHub: **Settings → Developer settings → Personal access
+   tokens → Fine-grained tokens → Generate new token.** Repository access: only this repository. Permissions:
+   **Actions = Read and write**, nothing else. It can then press *Run workflow* on one repository and do nothing
+   else anywhere — which is the whole of what the timer does. Copy it; GitHub shows it once. If you already hold a
+   classic token for Kythe and would rather not make a second, it works here too (it needs `repo` and `workflow`);
+   it can also write to every repository you own, which is the reason the narrow one is the better copy to leave
+   lying in a Google account.
 2. **script.google.com → New project.** Delete what is there, paste the whole of `lab/pinger.gs`.
 3. **Project Settings (gear) → Script Properties → Add property:** `REPO` = `your-name/your-circle`, and
    `TOKEN` = the token. They live outside the file, so a copy of the script is not a copy of your token.
