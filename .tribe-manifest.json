@@ -23,6 +23,7 @@
   "lab/tennis.py",
   "lab/tennis_script.py",
   "lab/update_tribe.py",
+  "lab/vision.py",
   "magazine.py",
   "outbox.py",
   "play/behaviour.md",

@@ -87,6 +87,8 @@ at the next wake and you will think you changed something when you did not.
 | `issues/` | the magazine, one file per issue, assembled from the shelf |
 | `games/<name>/` | the games, each in its own folder with its own records |
 | `plates/` | pictures. A member asks for one, and either a person makes it or the harness asks an engine that has an image model — the card beside it says which, and what the picture was asked for |
+| `wake/members/<name>/state/pictures/` | pictures a person **showed** a member, in a conversation: the page's own copy, re-encoded to a JPEG at most 1400px on the long side, because a repository carries every byte of it for ever. The conversation file records that a picture was here, its name, its size and this path — never the bytes |
+| `lab/vision.py` | **which model can actually see**, and the instrument that settles it: a probe generated here (a red square upper left, a blue ring lower right, white ground), a prompt that accepts "no image" and forbids guessing, and a table of what was measured, when, and in the model's own words. Measured 2026-11-22: `deepseek-flash` described the picture; `deepseek-v4-pro`, same key and request, answered "no image". The page carries a copy of the table and `lab/page-check.mjs` fails when the two disagree; a model nobody has measured is treated as blind, because a picture sent to a blind model produces a reply, not an error |
 | `lab/` | the instruments: the clock, the simulators, the scorekeeping, the experiments |
 | `facts/` | what a wake cannot look up: numbers written down with their source and the time they were taken |
 | `lab/session.py` | writes a member's attended-session recipe from its own files |

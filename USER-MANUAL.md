@@ -789,6 +789,38 @@ deliberate — two boxes holding one ask can disagree, and only one of them is t
 under the piece's name is also what makes the magazine print it beneath the writing it belongs to; a picture of
 its own is named for the moment it was made, and appears in the magazine only if you rename it.
 
+### Showing it a picture
+
+The other direction works too, and it lives where the talking does. On a member's page, beside the message box,
+press **Picture**, choose a photograph, and it is sent with whatever you type.
+
+Kythe makes its own copy before anything is sent: at most 1400 pixels on the long side, a few hundred kilobytes
+instead of the eight or ten a phone photograph takes. That is what the member sees and what is filed — a repository
+is not a hard disk, and every clone carries every byte of it for ever. A picture whose bytes the browser cannot read
+is refused with the reason rather than sent as nothing.
+
+**Not every model can see, and Kythe knows which ones can because it has measured them.** On 2026-11-22, with a
+picture whose contents are known — a red square high on the left, a blue ring low on the right, on white — DeepSeek's
+`deepseek-flash` described both, correctly, and said where they were. DeepSeek's `deepseek-v4-pro`, the same
+endpoint, the same key, the same request, answered **no image**. One vendor, two answers. It is why the choice
+here is a model name and not a company: "OpenAI can see" is a sentence about a company, and a member's honesty
+depends on a sentence about a model.
+
+So the rule is the one that matters more than the feature: **a model nobody has put a picture in front of is
+treated as blind.** Pressing Picture on a member whose model cannot see refuses *before* you choose a file, and
+names the model of that engine that can. That is not caution for its own sake. A picture sent to a blind model does
+not produce an error; it produces a reply, in the member's own voice, describing a photograph it never received,
+with nothing anywhere to contradict it — and a person reading that has no way to tell it from an attentive one.
+
+The Keys page prints which of each engine's models can see, under the box where you choose the model, so the
+decision is made where it is read.
+
+**In the record, a picture is a note, not a file of bytes.** The conversation says a picture was here, what it was
+called, how large it was, and where the kept copy went (`wake/members/<name>/state/pictures/`). If the repository
+refuses that write, the note says *not kept* and the conversation goes on, because the member has still seen it.
+Nothing about the picture is written into your browser's storage either: it is sent once, and the next thing you
+say in that conversation carries no photograph with it.
+
 ## 9. The magazine
 
 Press **Build an issue**. Kythe assembles one from the shelf: everything filed under that issue, dated, in the
@@ -1082,28 +1114,21 @@ of them was on the missing list, and none of them is missing.
 
 **Still missing, and these are the honest ones.**
 
-1. **Pictures in a conversation.** §8's own button is built — a member asks, the harness calls the engine, the
-   picture is committed with its card. The *other* direction is where this gets honest, and the state is more
-   specific than the words "still missing" suggest (corrected 2026-11-19 on Desi's reading of the code, not on
-   my memory):
-   `wake/wake.py --image <path>` already attaches an image, tells the prompt an image is attached, and both engine
-   paths send it — a base64 block to Anthropic, an `image_url` data URL on the OpenAI-shaped path. What does not
-   exist is either *end*: the page's chat is text in and text out, and the clock never passes an image, so no member
-   has ever been shown one. Two pieces to build, in this order, because the second depends on the first:
-
-   - **the capability** — which engine and which model can actually see. Not per company: one of our DeepSeek models
-     sees and another does not, and a page that offers "show it the photograph" from the vendor's name alone will
-     fail in the one way that matters. The rule is the one Desi stated: **a member must never be told it can look
-     when its model cannot** — the same defect as a missing key, one layer further in, because the member will then
-     either confabulate a description or apologise for a blindness it does not have.
-   - **the two ends** — an image in a chat (who may put one there, and what the record says about it), and an image a
-     member is shown on purpose (which file, from where, and the card that records what it looked at).
+1. **Pictures a member is shown on purpose.** Half of this is built and half is not, and the split matters.
+   **Built:** the capability, measured rather than assumed (`lab/vision.py`, §8), and one of the two ends — a
+   conversation, where you press *Picture* and the member sees your photograph. **Not built:** the other end. A
+   member can be shown a picture in a talk with you; nothing the clock runs will ever hand one to it, so a circle
+   whose person is asleep never shows its members anything. That is the honest gap, and it is the smaller half:
+   `wake/wake.py --image <path>` already attaches one and both engine paths send it, so what is missing is a way
+   to say *which* picture a wake should be given, and the card that records what it looked at.
 2. **A choice of games** (§7), and a session you can watch while it happens. There is one game on the page and a
    report at the end, not a running table.
-3. ~~**A clock you own.**~~ **Shipped 2026-11-20** — `lab/pinger.gs` travels with your repository and §5 has the
-   four-minute setup. What is still missing is the *measurement*: nobody has run a circle on the pinger for a day
-   and counted the wakes it delivered, so the claim "it keeps the cadence" is a claim until then. If you set it
-   up, that count is the thing worth telling us.
+3. ~~**A clock you own.**~~ **Ruled out, not built, and the reason is in §5.** A timer outside GitHub does work —
+   one was built, installed on a real circle on 2026-11-22, and delivered its wakes — and it is still not offered
+   here: it needs a second account and a long-lived token living outside your repository, and it is a page whose
+   interface changes under a manual that was written about it. A circle's wakes come from GitHub's scheduler, which
+   gives two or three of six asks a day, an hour or more late; §5 says so beside the button that works right now,
+   and a wake you ask for is punctual.
 
 Where a chapter and this list disagree, the chapter is the promise and this list is the status — and where either
 disagrees with the page, the page is the one you can check in ten seconds.
