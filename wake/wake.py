@@ -29,6 +29,108 @@ OUTPUT = ROOT / "output"
 # the same run it always described.
 MEMBERS = ROOT / "members"
 
+# ---- a picture waiting to be looked at ---------------------------------------------------------
+#
+# The other direction of item 6, and the one that works while nobody is in the room. A person leaves a
+# picture in `state/inbox/` and the next wake is shown it. Three rules, and each of them exists because the
+# alternative is a lie that cannot be contradicted:
+#
+# 1. **A model that cannot see is never handed one, and is told so in one line.** `vision.json` is the
+#    measured table, shared with the page and with `lab/vision.py`. Absent means unmeasured, unmeasured
+#    means blind. A picture given to a blind model does not error — it produces a reply, in the member's
+#    voice, describing a photograph that never arrived.
+# 2. **One picture per wake.** A wake is one call. Several waiting are looked at oldest first, which is the
+#    order the person left them in and the only order that needs no rule.
+# 3. **The card is the harness's, not the member's.** `state/looked-at.md` records what was shown, when, to
+#    which model, its sha1, and what became of it. The member's own words are in `journal.md` and in the
+#    file it wrote. A record that the member writes about its own attention is not evidence of attention.
+VISION = ROOT / "vision.json"
+PICTURE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+INBOX = "inbox"
+CARD = "looked-at.md"
+MAX_PICTURE_BYTES = 4 * 1024 * 1024
+
+
+def vision_table(path: Path | None = None) -> dict:
+    """The measured table. A file that cannot be read is a table with nothing in it, which reads as blind."""
+    try:
+        return dict(json.loads(Path(path or VISION).read_text(encoding="utf-8")).get("models") or {})
+    except Exception:  # noqa: BLE001 — a missing table must fail toward "cannot see", never toward "can"
+        return {}
+
+
+def sees_picture(model_id: str, table: dict | None = None) -> bool:
+    row = (table if table is not None else vision_table()).get(str(model_id or "").strip())
+    return bool(row and row.get("sees") is True)
+
+
+def sha1_of(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha1()
+    h.update(Path(path).read_bytes())
+    return h.hexdigest()
+
+
+def looked_at(state_dir: Path) -> list[dict]:
+    """The cards already written, as rows. The sha1 is what decides whether a picture has been seen."""
+    path = Path(state_dir) / CARD
+    if not path.is_file():
+        return []
+    rows, cur = [], {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — (.*)$", line)
+        if m:
+            if cur:
+                rows.append(cur)
+            cur = {"at": m.group(1), "name": m.group(2).strip()}
+            continue
+        m = re.match(r"^- (sha1|shown|not shown|came of it): (.*)$", line)
+        if m and cur is not None:
+            cur[m.group(1)] = m.group(2).strip()
+    if cur:
+        rows.append(cur)
+    return rows
+
+
+def waiting_picture(state_dir: Path) -> Path | None:
+    """The oldest picture in the inbox that no wake has looked at, or None.
+
+    A picture already recorded is skipped by sha1 rather than by name, because the same photograph can be
+    left twice under two names and the person would be right to expect it looked at twice — while the same
+    file left once must not be looked at every wake for a week.
+    """
+    box = Path(state_dir) / INBOX
+    if not box.is_dir():
+        return None
+    # A picture is spent when a wake actually *showed* it. A card that says "not shown" is the harness saying
+    # the model could not be shown one — and the picture must keep waiting for a model that can, or leaving a
+    # photograph on a blind member would consume it silently and switching to a seeing model would find an empty
+    # inbox. Found by running it: the first end-to-end wake recorded the picture against a dead endpoint and the
+    # card looked exactly like a picture that had been looked at.
+    seen = {str(r.get("sha1", ""))[:12] for r in looked_at(state_dir)
+            if r.get("sha1") and "not shown" not in r}
+    files = [p for p in box.iterdir()
+             if p.is_file() and p.suffix.lower() in PICTURE_SUFFIXES and not p.name.startswith(".")]
+    for p in sorted(files, key=lambda f: (f.stat().st_mtime, f.name)):
+        if p.stat().st_size > MAX_PICTURE_BYTES:
+            continue
+        if sha1_of(p)[:12] in seen:
+            continue
+        return p
+    return None
+
+
+def picture_card(picture: Path, model: str, *, shown: bool, outcome: str, why: str = "") -> str:
+    """The harness's line about one picture. Written after the wake, because a card written before it can
+    say a thing happened that did not."""
+    now = datetime.now(timezone.utc)
+    size = picture.stat().st_size
+    return (f"\n## {now:%Y-%m-%d %H:%M} UTC — {picture.name}\n\n"
+            f"- sha1: {sha1_of(picture)[:12]} ({size:,} bytes)\n"
+            + (f"- shown: {model}, a model measured as seeing a picture ({outcome})\n" if shown else
+               f"- not shown: {model} is not measured as seeing a picture — {why} ({outcome})\n")
+            + f"- came of it: {outcome}\n")
+
 
 def set_member(name: str | None) -> str:
     """Point STATE and OUTPUT at wake/members/<name>/, and return the path a member should write to."""
@@ -999,6 +1101,9 @@ def main() -> int:
 
     if not args.model and not args.api_model:
         ap.error("give either --model (local weights) or --api-model (an API)")
+    # The model id, before the label replaces it: the label ("deepseek-flash (api)") is for the journal, and
+    # the id is what the vision table is keyed by. Reading the label would make every model unmeasured.
+    model_id = str(args.api_model or args.model)
     if not args.model:
         args.model = args.api_model + " (api)"   # the label the journal and the commit use
     out_dir = set_member(args.member)
@@ -1222,11 +1327,51 @@ having answered something nobody said.
     # thing a person saw when their key was missing was twenty-six thousand characters of prompt
     # and then one line of error at the bottom of it — with the error, and not the prompt, a
     # screenful away from the command they typed. A missing credential is answered in one line.
+    # A picture: one named on the command line, or the oldest one waiting in the member's inbox. The gate
+    # is before the call and before the prompt, because the prompt is where a member is told what it has.
     images = None
-    if args.image:
-        raw = Path(args.image).read_bytes()
-        images = [base64.b64encode(raw).decode()]
-        prompt += f"\n\nAn image is attached to this message ({len(raw)} bytes)."
+    look = None
+    picture = Path(args.image) if args.image else waiting_picture(STATE)
+    if picture and not picture.is_file():
+        print(f"!! no such picture: {picture}")
+        picture = None
+    if picture:
+        try:
+            raw = picture.read_bytes()
+        except Exception as e:  # noqa: BLE001 — an unreadable picture is a finding, not a crash
+            print(f"!! the picture {picture} could not be read: {e}")
+            raw = b""
+            picture = None
+        if picture and len(raw) > MAX_PICTURE_BYTES:
+            print(f"!! {picture.name} is {len(raw):,} bytes — over the {MAX_PICTURE_BYTES:,} a repository is "
+                  f"asked to carry for one picture, so it was not shown")
+            picture = None
+            raw = b""
+        if picture and sees_picture(model_id):
+            images = [base64.b64encode(raw).decode()]
+            look = {"path": picture, "shown": True, "why": ""}
+            prompt += f"""
+
+=== A PICTURE IS WAITING FOR YOU ===
+A person left this picture for you: `{picture.name}` ({len(raw):,} bytes). It is attached to this message.
+Look at it before you decide what to do. What goes in your journal is what you can actually see in it — the
+things that are there, and where they are — not what a picture like this usually contains. Nothing requires
+you to make anything: a photograph can be the whole of a wake, and saying what you noticed is a real answer.
+"""
+        elif picture:
+            row = vision_table().get(model_id) or {}
+            why = ("it answered text only when a known picture was put in front of it"
+                   if row.get("sees") is False else "nobody has measured whether it can see one")
+            look = {"path": picture, "shown": False, "why": why}
+            prompt += f"""
+
+=== A PICTURE YOU CANNOT BE SHOWN ===
+A person left a picture for you: `{picture.name}`. Your model cannot be shown it — {why} — so you were not
+given it, and there is no copy of it in this message. Say that plainly if it belongs in your journal, and do
+not describe it: a description of a picture you were not given is worse than saying you cannot look, because
+nobody reading it could tell the difference. A person reading the record will see this note too, and can put
+you on a model that can see.
+"""
 
     base, names, key = "", [], None
     if args.api_model:
@@ -1459,6 +1604,23 @@ having answered something nobody said.
             s = s.rstrip() + f"\n{line}\n"
             print(f"!! state.md had no '{pattern}' line — appended it rather than losing the record")
     (STATE / "state.md").write_text(s, encoding="utf-8")
+
+    if look:
+        # The card is written after the wake and never before it: "shown" is a fact about what happened, and a
+        # card written first can be a card about an intention. It is the harness's line, in the harness's files,
+        # and the member's own words stay where the member put them.
+        card = STATE / CARD
+        head = "" if card.exists() else (
+            f"# What {args.member or 'this member'} has been shown\n\n"
+            "Written by the harness, not by the member: one section per picture — the file, its sha1, whether "
+            "the model could be shown it, and what came of that wake. The member's own words are in "
+            "`journal.md` and in whatever it wrote. A picture is listed here once; it is never shown twice.\n")
+        outcome = verdict if written in ("", "(none)") else f"{verdict}; wrote {written}"
+        with card.open("a", encoding="utf-8") as f:
+            f.write(head)
+            f.write(picture_card(look["path"], model_id, shown=look["shown"], outcome=outcome,
+                                 why=look["why"]))
+        print(f"card: {card} — {look['path'].name} ({'shown' if look['shown'] else 'not shown'})")
 
     if payload.get("finish") and payload["finish"] != "STOP":
         print(f"!! finish reason: {payload['finish']} (a reply cut off is our ceiling, not its failure)")

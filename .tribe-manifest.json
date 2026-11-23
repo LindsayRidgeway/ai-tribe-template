@@ -32,6 +32,7 @@
   "play/play.py",
   "talk.sh",
   "tribe.py",
+  "wake/vision.json",
   "wake/wake.py"
  ]
 }

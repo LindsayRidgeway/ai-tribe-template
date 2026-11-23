@@ -9,7 +9,7 @@ confabulates a description or apologises for a blindness it does not have.
 
 So the rule here is the same one the painters table follows, one step further in:
 
-  **Nothing is recorded as seeing.** `TABLE` holds only models this file has been pointed at, with a picture
+  **Nothing is recorded as seeing.** `wake/vision.json` holds only models this file has been pointed at, with a picture
   whose contents are known, on a date, with the model's own words. A model that is not in the table is
   *unmeasured*, and every caller must treat unmeasured as "cannot" — a member must never be told it can look
   when its model cannot. That is the same defect as a missing key, one layer further in, and it is invisible
@@ -44,17 +44,36 @@ sys.path.insert(0, str(ROOT / "wake"))
 import wake  # noqa: E402 — one implementation of the three channels, not a second copy of them
 
 # ---------------------------------------------------------------------------------------------
-# The table. JSON, deliberately: the page carries a copy so it can refuse before it spends a call,
-# and `lab/page-check.mjs` compares the two rather than trusting either. Everything in here was
-# measured with the probe below; everything absent from here is unknown, and unknown means blind.
-TABLE = """{
-  "deepseek-flash": {"engine": "deepseek", "model": "deepseek-flash", "sees": true,
-                     "measured": "2026-11-22",
-                     "said": "A red square sits in the upper-left area of the frame. A blue circle sits in the lower-right area of the frame."},
-  "deepseek-v4-pro": {"engine": "deepseek", "model": "deepseek-v4-pro", "sees": false,
-                      "measured": "2026-11-22",
-                      "said": "no image"}
-}"""
+# The table lives in `wake/vision.json`, not here, and that is the one structural decision in this file.
+# Three readers need it: this instrument (which measures and records), the page (which refuses a picture
+# before spending a call), and `wake/wake.py` (which refuses to hand a wake a picture its model cannot see).
+# A second copy of a table is a table that drifts, and the shipped one is the only one that reaches a
+# circle — so the file ships and everything reads it. Absent from it means unmeasured, and unmeasured is
+# treated as blind.
+TABLE_PATH = ROOT / "wake" / "vision.json"
+
+
+def read_table(path: Path | None = None) -> dict:
+    """The measured rows: model id -> {engine, sees, measured, said}."""
+    data = json.loads(Path(path or TABLE_PATH).read_text(encoding="utf-8"))
+    return dict(data.get("models") or {})
+
+
+def record(model: str, row: dict, path: Path | None = None) -> dict:
+    """Write one measurement back into the shipped table, keeping the keys a reader expects.
+
+    Called by `--record` and by nothing else: a measurement is written by hand or by the instrument that
+    made it, never by the code path that reads the answer.
+    """
+    p = Path(path or TABLE_PATH)
+    data = json.loads(p.read_text(encoding="utf-8"))
+    models = data.setdefault("models", {})
+    models[model] = {"engine": row["engine"], "sees": row["sees"],
+                     "measured": row["measured"], "said": row["said"]}
+    data["models"] = dict(sorted(models.items()))
+    p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return data["models"]
+
 
 # The prompt is a trap for the confident, not a courtesy. It names the failure it will accept ("no image"),
 # demands the three facts a guess cannot supply (two shapes, two colours, two positions), and forbids the one
@@ -138,10 +157,6 @@ def ask_with_image(engine: str, model: str, image: Path, prompt: str = PROBE_PRO
     return wake.ask_api(base, key, model, prompt, [b64])
 
 
-def read_table() -> dict:
-    return json.loads(TABLE)
-
-
 def verdict(said: str, failed: str = "") -> dict:
     """What the words show. Two of the three facts is a seer; a refusal in the engine's own name is blind;
     a fluent description that matches nothing is the dangerous case and is recorded as such rather than
@@ -169,7 +184,9 @@ def main() -> int:
     ap.add_argument("--image", default="")
     ap.add_argument("--make-probe", default="", help="write the ground-truth picture and stop")
     ap.add_argument("--table", action="store_true", help="print what is recorded, and what is not")
-    ap.add_argument("--json", action="store_true", help="one line, paste-ready for TABLE")
+    ap.add_argument("--json", action="store_true", help="print the record as one JSON object")
+    ap.add_argument("--record", action="store_true",
+                    help="write the measurement into wake/vision.json (the file the page and the wake both read)")
     a = ap.parse_args()
 
     if a.make_probe:
@@ -206,11 +223,17 @@ def main() -> int:
            "measured": datetime.date.today().isoformat(),
            "said": (said.strip()[:240] or failed[:240])}
     if a.json:
-        print(json.dumps({a.model: row}))
+        print(json.dumps({a.model: row}, indent=2, ensure_ascii=False))
+    print(f"\nverdict: {v['why']} — sees={v['sees']}")
+    if a.record and v["sees"] is not None:
+        record(a.model, row)
+        print(f"recorded in {TABLE_PATH.relative_to(ROOT)}: {a.model} sees={v['sees']} ({row['measured']})")
+    elif v["sees"] is None:
+        print("not recorded: the answer did not match the picture, and a verdict that is not a verdict is how a "
+              "confabulating model gets into the table. Read the words, then decide by hand.")
     else:
-        print(f"\nverdict: {v['why']} — sees={v['sees']}")
-        print("Record it by hand in TABLE above, with the date and the words. Read the words first: a model that"
-              "\ndescribes a picture it was not shown is the case this file exists to keep out of the table.")
+        print("Not recorded. Add --record to write it, or say plainly why it should not be: a model that describes "
+              "\na picture it was not shown is the case this file exists to keep out.")
     return 0 if v["sees"] else 1
 
 

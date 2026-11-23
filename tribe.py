@@ -292,6 +292,26 @@ def identity_text(name: str, seat: str, of: str, person: str, about: str = "",
                             memory=LEAN_ASSERT, **bits)
             + f"\nportrait: {PORTRAIT_DEFAULT}\n")
 
+INBOX_README = """# Pictures for this member to look at
+
+Put a picture in this folder and the next wake is shown it — once. One picture per wake, oldest first, and
+what came of it is written into `state/looked-at.md`, which sits beside this folder.
+
+- **It has to be a picture**: `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`, and no more than 4 MB. A repository
+  carries every byte of it for ever, so a bigger file is skipped with a line in the wake's output rather than
+  committed.
+- **The model has to be able to see it, and that is measured rather than assumed.** `wake/vision.json`
+  records which models have actually been shown a picture and described it — one vendor's two models can
+  disagree, which is why it is keyed by model id. If this member's model is not in there, it is not given the
+  picture: it is told there is one it cannot be shown, and the card says so too. Press *Picture* in a
+  conversation to try the same thing by hand.
+- **Once only.** After a wake has *shown* a picture, `looked-at.md` lists it by sha1 and it is never shown
+  again. A picture the model could not be shown is not used up — it keeps waiting for a model that can see, and
+  the card says so. To have a looked-at picture shown again, change it even slightly (a re-save changes the
+  bytes), or delete that section from the card.
+- Delete the file here when you are done with it, if you like. The card is the record, not this folder.
+"""
+
 OPEN_ITEMS = """# Open items
 
 1. Read my identity and my journal, then write one file that says what I am for. Number the items you
@@ -496,6 +516,11 @@ def new(name: str, seat: str, api: str, model: str, of: str, place: str = "", pe
         "# Checks I want run before my next wake\n\n", encoding="utf-8")
     (base / "state" / "findings.md").write_text(
         "# What my checks found\n\n(nothing yet)\n", encoding="utf-8")
+    # Pictures a person wants this member to look at while nobody is in the room. The folder is created with a
+    # README in it, for the same reason `output/` gets a `.gitkeep`: a folder with nothing in it is a folder git
+    # drops on the next clone, and a folder nobody explains is a folder nobody uses.
+    (base / "state" / "inbox").mkdir()
+    (base / "state" / "inbox" / "README.md").write_text(INBOX_README, encoding="utf-8")
     (base / "state" / "brief.md").write_text(
         "# Brief — what this circle is working on now\n\n"
         "**Closes soonest:** (nothing has a deadline yet)\n\n"

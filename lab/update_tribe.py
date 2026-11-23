@@ -58,7 +58,10 @@ RETIRED_NAME = ".tribe-retired.json"
 # Machinery: files the project owns and keeps current. A path is replaceable if it starts with one of
 # these prefixes and is not in CONTENT below. Root-level `.py`, `.sh` and the three documents are added
 # by `is_machinery()`.
-MACHINERY_PREFIXES = (".github/workflows/", "lab/", "wake/wake.py", "play/")
+# `wake/vision.json` is machinery and not content: it is the measured table of which models can be shown a
+# picture, and a better measurement must be able to replace a worse one the same way a bug fix does. It is
+# named individually because everything else under `wake/` belongs to the members.
+MACHINERY_PREFIXES = (".github/workflows/", "lab/", "wake/wake.py", "wake/vision.json", "play/")
 ROOT_DOCS = ("USER-MANUAL.md", "REFERENCE.md", "MANIFEST.md")
 
 # Everything under these belongs to the owner, or is derived from what belongs to the owner.

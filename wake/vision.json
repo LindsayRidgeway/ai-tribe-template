@@ -1,0 +1,36 @@
+{
+  "_why": "Which models can actually be shown a picture. One file, three readers: the page (a copy, compared by lab/page-check.mjs), lab/vision.py (the instrument that measures and records), and wake/wake.py (which refuses to hand a picture to a model that cannot see). A model absent from this file is unmeasured, and unmeasured is treated as blind — a picture sent to a blind model returns a reply, not an error, and the reply describes a photograph that never arrived.",
+  "_measure": "python3 lab/vision.py --engine <engine> --model <id> --image <probe>",
+  "models": {
+    "deepseek-flash": {
+      "engine": "deepseek",
+      "sees": true,
+      "measured": "2026-11-22",
+      "said": "A red square sits in the upper-left area of the frame. A blue circle sits in the lower-right area of the frame."
+    },
+    "deepseek-v4-pro": {
+      "engine": "deepseek",
+      "sees": false,
+      "measured": "2026-11-22",
+      "said": "no image"
+    },
+    "gemma3:4b": {
+      "engine": "local",
+      "sees": true,
+      "measured": "2026-11-01",
+      "said": "a single, red cube resting on a wooden surface... glossy and uniformly colored... dark, textured wood... minimal shadows... background is indistinct."
+    },
+    "llama3.2:3b": {
+      "engine": "local",
+      "sees": false,
+      "measured": "2026-11-01",
+      "said": "HTTP 400 — it cannot be given an image at all: not a refusal, a rejection"
+    },
+    "qwen2.5vl:3b": {
+      "engine": "local",
+      "sees": false,
+      "measured": "2026-11-01",
+      "said": "has eyes and did not use them: answered a different question about journal.md and invented a read_file action the contract does not contain"
+    }
+  }
+}
