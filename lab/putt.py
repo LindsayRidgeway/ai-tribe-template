@@ -83,6 +83,7 @@ def roll(start: tuple[float, float], bearing: float, speed: float, green: Green,
     vx, vy = ux * speed, uy * speed
     t = 0.0
     lipout = False
+    cross = None          # the point at which the path came nearest the hole, if it ever faced it
     hx, hy = hole
     path: list | None = [] if trace else None
     when = 0.0
@@ -96,7 +97,8 @@ def roll(start: tuple[float, float], bearing: float, speed: float, green: Green,
         v = math.hypot(vx, vy)
         if v < 0.02:
             snap(t, x, y)
-            return dict(finish=(x, y), hole=False, lipout=lipout, t=t, speed_at_hole=None, path=path)
+            return dict(finish=(x, y), hole=False, lipout=lipout, t=t, speed_at_hole=None, path=path,
+                        cross=cross)
         ax = -mu * vx / v + sx
         ay = -mu * vy / v + sy
         nx, ny = x + vx * DT, y + vy * DT
@@ -107,11 +109,17 @@ def roll(start: tuple[float, float], bearing: float, speed: float, green: Green,
         if s0 < 0.0 <= s1:
             f = -s0 / (s1 - s0)
             cx, cy = x + f * (nx - x), y + f * (ny - y)
+            # The first moment the velocity faces square across the line to the hole is the moment the ball is
+            # nearest it: s = (p - h)·v̂ has ds/dt = |v| > 0 away from zero, so s = 0 is a local minimum of the
+            # distance. That is the point a putt is read against, and until pass 24 nothing reported it — so a
+            # putt that ran past the hole was read against where it *stopped*, which for a breaking putt is not
+            # where it crossed. Reported here rather than recomputed by the caller, which would need the path.
+            cross = (cx, cy)
             if math.hypot(cx - hx, cy - hy) <= HOLE_R:
                 if v < CAPTURE_SPEED:
                     snap(t + f * DT, hx, hy)
                     return dict(finish=hole, hole=True, lipout=False, t=t + f * DT, speed_at_hole=v,
-                                path=path)
+                                path=path, cross=cross)
                 lipout = True
         vx, vy = vx + ax * DT, vy + ay * DT
         x, y, t = nx, ny, t + DT
@@ -120,7 +128,8 @@ def roll(start: tuple[float, float], bearing: float, speed: float, green: Green,
             when = t + trace
         if t > 60.0:                                        # a putt that never stops is a bug
             snap(t, x, y)
-            return dict(finish=(x, y), hole=False, lipout=lipout, t=t, speed_at_hole=None, path=path)
+            return dict(finish=(x, y), hole=False, lipout=lipout, t=t, speed_at_hole=None, path=path,
+                        cross=cross)
 
 
 def report(finish: tuple[float, float], start: tuple[float, float],

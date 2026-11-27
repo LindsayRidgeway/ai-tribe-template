@@ -40,8 +40,10 @@ permissions:
 jobs:
   play:
     runs-on: ubuntu-latest
-    # Measured on a laptop: 31 s for the season at four rounds and four bags, and the six pages add a couple of
-    # minutes. The timeout is generous because a runner is slower than this machine, not because the work is big.
+    # Measured on a laptop: 49 s for the season at four rounds and four bags (31 s until pass 25 made the pace a
+    # decision — an expectation over the athlete's own scatter, sixty-five of them a putt — and the six pages add
+    # a couple of minutes). The timeout is generous because a runner is slower than this machine, not because the
+    # work is big.
     timeout-minutes: 30
     concurrency:
       group: golf

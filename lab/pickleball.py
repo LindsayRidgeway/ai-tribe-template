@@ -1154,6 +1154,7 @@ def play_game(names: list[str], practice: list[int], choose_factory, surface: st
     # ENGINE kept, and before this line every caller rebuilt its own Player objects to do it and recorded zero
     # shots for everyone — a season whose `balls` never moved. One source for one number.
     out = {"results": results, "lengths": lengths, "wind": wind_in, "clock": ms,
+           "score": (match.teams[0].score, match.teams[1].score),
            "surface": surface, "why": r["why"] if lengths else "none",
            "rallies": rallies, "players": players}
     if film is not None:
@@ -2102,6 +2103,257 @@ def write_film(scene: dict, out_json: str | Path, out_page: str | Path | None = 
     return pj, pp
 
 
+def games_in(book: dict) -> list[dict]:
+    """The season's games, each one once — reconstructed from the sessions the file keeps per member.
+
+    A session is written under every player's name, because that is what a member's record is: its own balls, its
+    own in-play count, its own mix. A *game* is a fact about four people, and until §5aa the report could only see
+    the member's half of it: two bullets, one under Lindsay and one under Desi, each saying "played with", neither
+    saying that the same eleven-to-two happened to both of them on the same side of the same net.
+
+    Sessions are grouped by `(when, clock)` — the millisecond count is the game's own identity, so two games played
+    against the same four people cannot be mistaken for one — and a session that carries neither teams nor a score
+    is still a game for counting purposes and says so rather than being dropped.
+    """
+    seen: dict[tuple, dict] = {}
+    for name, m in sorted(book.get("members", {}).items()):
+        for s in m.get("sessions") or []:
+            key = (s.get("when"), s.get("clock"))
+            g = seen.setdefault(key, {"when": s.get("when"), "clock": s.get("clock"),
+                                      "surface": s.get("surface"), "score": s.get("score"),
+                                      "teams": s.get("teams"), "modes": set(), "played": set()})
+            g["played"].add(name)
+            if s.get("mode"):
+                g["modes"].add(s["mode"])
+            g["score"] = g["score"] or s.get("score")
+            g["teams"] = g["teams"] or s.get("teams")
+    return [seen[k] for k in sorted(seen, key=lambda k: (str(k[0]), str(k[1])))]
+
+
+def game_line(g: dict, show_clock: bool = False) -> str:
+    """One game as a person would say it: who was on each side, and which side the score belongs to.
+
+    `show_clock` is for a season that played two games inside one minute — which a runner does — where the times
+    alone would print two identical lines and a reader could not tell them apart.
+    """
+    when = str(g.get("when") or "unknown")[:16].replace("T", " ")
+    bits = [when, str(g.get("surface") or "unknown surface")]
+    if show_clock and g.get("clock") is not None:
+        bits.append(f"clock {g['clock']}")
+    head = " ".join(bits)
+    teams, score = g.get("teams"), g.get("score")
+    if teams and len(teams) == 2 and isinstance(score, list) and len(score) == 2:
+        a, b = teams
+        if score[0] == score[1]:
+            verb = "level with"
+            return f"- {head} · **{score[0]}–{score[1]}** — {'/'.join(a)} {verb} {'/'.join(b)}."
+        win, lose = (a, b) if score[0] > score[1] else (b, a)
+        return f"- {head} · **{score[0]}–{score[1]}** — {'/'.join(win)} beat {'/'.join(lose)}."
+    if teams:
+        return f"- {head} — {'/'.join(teams[0])} against {'/'.join(teams[1])}, and no score in the record."
+    return (f"- {head} — a game whose sides and score were not recorded; this session is older than the "
+            f"fields that carry them.")
+
+
+def merge_scenes(parts: list[tuple[str, dict]]) -> dict:
+    """Two games, one film: the rally numbers run on and every rally carries the label of the hands that played it.
+
+    The founder asked (2026-11-27) for the thing a person most wants to see — a video of a game that reflects the
+    players' current skill, and that over time shows improved play. One game answers the first half. The second
+    half needs two games, and the honest way to show a difference is to hold everything except the difference
+    fixed: same court, same clock, same four names, and one member's hands changed. Then whatever moves on screen
+    moved because of practice and nothing else.
+
+    They are put in *one* film rather than two pages so that a person watches them in order without touching
+    anything: the first game is played, the second follows it, and the caption names whose hands are on the ball.
+    Nothing here recomputes a ball; both games were integrated by the engine and are concatenated, renumbered only
+    so that a rally number is unique in the file (the renderer keys its scoreboard on it).
+    """
+    if not parts:
+        raise ValueError("no films to merge")
+    _label0, base = parts[0]
+    out = json.loads(json.dumps(base))                     # a copy: a caller's scene is not ours to edit
+    out["rallies"] = [dict(r, label=parts[0][0]) for r in out.get("rallies") or []]
+    top = max([r["rally"] for r in out["rallies"]] or [0])
+    for label, scene in parts[1:]:
+        off = top
+        for key in ("shots", "moves"):
+            for x in scene.get(key) or []:
+                y = dict(x)
+                y["rally"] = x["rally"] + off
+                out.setdefault(key, []).append(y)
+        for r in scene.get("rallies") or []:
+            out["rallies"].append(dict(r, rally=r["rally"] + off, label=label))
+        top += max([r["rally"] for r in scene.get("rallies") or []] or [0])
+    out["note"] = " · ".join(f"{label}: {scene.get('score', [0, 0])[0]}–{scene.get('score', [0, 0])[1]} "
+                             f"in {len(scene.get('rallies') or [])} rallies" for label, scene in parts)
+    out["parts"] = [{"label": label, "score": scene.get("score"), "rallies": len(scene.get("rallies") or []),
+                     "shots": len(scene.get("shots") or []),
+                     "mean_rally": round(sum(r["shots"] for r in scene.get("rallies") or []) /
+                                         max(1, len(scene.get("rallies") or [])), 1)} for label, scene in parts]
+    return out
+
+
+def run_then_now(args) -> int:
+    """The same pinned game played at two hands, in one film: what practice looks like on screen.
+
+    `then` is the member's balls *coming into* this season and `now` is its balls including this season's sessions,
+    so the two games differ by exactly the practice the season has recorded — a difference the record can cite and
+    a viewer can watch. The other three players keep their current hands, so the film is a controlled experiment
+    rather than a different match: one body's reach and control change between the halves and nothing else does.
+    """
+    person = args.then_now
+    names = [n.strip() for n in args.names.split(",")]
+    if len(names) != 4 or len(set(names)) != 4 or not all(names):
+        print("   --then-now needs four different names, member first: --names '<you>,<m>,<m>,<m>'", file=sys.stderr)
+        return 2
+    book, practice = open_book(names, args, default="0,0,0,0", sport="pickleball")
+    if book is None or person not in (book.get("members") or {}):
+        print(f"   {person} has no record in this season, so there is no 'then' to film. Play a session first.",
+              file=sys.stderr)
+        return 2
+    now = practice_of(book, person)
+    then = max(0, now - int(book["members"][person].get("balls", 0)))
+    if then == now:
+        print(f"   {person} came in with {now} balls and has hit none this season, so the two halves would be the "
+              f"same film. Nothing was baked.", file=sys.stderr)
+        return 2
+    clock = args.clock if args.clock is not None else 1234500
+    factory = make_chooser(args.level)
+    parts: list[tuple[str, dict]] = []
+    for label, balls in ((f"{person}, {then} balls coming in", then), (f"{person}, {now} balls now", now)):
+        hands = [balls if n == person else p for n, p in zip(names, practice)]
+        film: dict = {}
+        match, result = play_game(names, hands, factory, surface=args.surface, first_team=0,
+                                  wind_seed_ms=clock, film=film,
+                                  say=print if getattr(args, "verbose", False) else (lambda *a, **k: None))
+        scene = film_scene(film, names, score=(match.teams[0].score, match.teams[1].score), clock=clock,
+                           surface=args.surface,
+                           note=f"{label} — the same clock, the same three opponents"
+                                + (f" · {args.note}" if getattr(args, "note", None) else ""))
+        parts.append((label, scene))
+        mean = sum(film["rallies"][i]["shots"] for i in range(len(film["rallies"]))) / max(1, len(film["rallies"]))
+        miss = fault_mix({"rallies": film["rallies"]})
+        print(f"  {label}: {match.teams[0].score}-{match.teams[1].score} in {len(film['rallies'])} rallies, "
+              f"mean {mean:.1f} shots, not got to {sum(v.get('unreachable', 0) for v in miss.values())}")
+    merged = merge_scenes(parts)
+    pj, pp = write_film(merged, args.film or "games/pickleball/records/then-now.json",
+                        args.page or "games/pickleball/replays/then-now.html")
+    print(f"  film: {len(merged['shots'])} shots over two games -> {pj}" + (f" and {pp}" if pp else ""))
+    return 0
+
+
+def report(season: str, override: str | None = None) -> str:
+    """A pickleball season's report: the record's own numbers, in this sport's units, and only the sentences the
+    numbers support.
+
+    Until 2026-11-27 a pickleball season had no report of its own — `season_report(…, "pickleball")` accepted the
+    sport, ignored it, read tennis's file and said nobody had hit a ball (page §5z). What this prints instead is
+    what the file can carry: the balls, the in-play rate, the length of a rally, and the mix of misses — which is
+    the number §5u's arithmetic left standing as the one a game count can carry.
+
+    The guards are the same ones tennis's report keeps, for the same reason: one session is a reading, a session
+    with no mix is a gap and not a good day, and a season that has played nothing is described as having played
+    nothing rather than being rated at zero.
+    """
+    from tennis import load_season, season_paths, practice_of, ROOT
+    book = load_season(season, override, "pickleball")
+    d, f = season_paths(season, override, "pickleball")
+    try:
+        shown = f.relative_to(ROOT)
+    except ValueError:
+        shown = f
+    if not book.get("members"):
+        return (f"No pickleball season at {shown}. Nobody has hit a ball in {season} yet, so there is nothing to "
+                f"report and nothing to cite.\n")
+    out = [f"# {season} — pickleball, what the record says", "",
+           f"From `{shown}`, opened {book.get('opened') or 'unknown'}. Every number below is computed from the "
+           f"sessions in that file; nothing here is written from memory.", ""]
+    games = games_in(book)
+    if games:
+        minute = lambda g: str(g.get("when") or "")[:16]
+        twice = {minute(g) for g in games if sum(1 for o in games if minute(o) == minute(g)) > 1}
+        out += ["## the games", ""] + [game_line(g, minute(g) in twice) for g in games] + [""]
+    for name in sorted(book["members"]):
+        m = book["members"][name]
+        ss = m.get("sessions") or []
+        out += [f"## {name}", ""]
+        partners: dict[str, int] = {}
+        for s in ss:
+            for other in s.get("with", []):
+                partners[other] = partners.get(other, 0) + 1
+        who = ", ".join(f"{o} ({n}x)" for o, n in sorted(partners.items(), key=lambda kv: -kv[1]))
+        sides: dict[str, int] = {}
+        for s in ss:
+            teams = s.get("teams")
+            if not teams or len(teams) != 2:
+                continue
+            mine = next((i for i, team in enumerate(teams) if name in team), None)
+            if mine is None:
+                continue
+            beside = [o for o in teams[mine] if o != name]
+            across = teams[1 - mine]
+            key = (f"beside {' and '.join(beside) or 'nobody'} against {' and '.join(across)}")
+            sides[key] = sides.get(key, 0) + 1
+        if sides:
+            out.append("- played " + "; ".join(f"{k} ({v} game{'' if v == 1 else 's'})"
+                                        for k, v in sorted(sides.items(), key=lambda kv: -kv[1])) + ".")
+        if m.get("balls"):
+            out.append(f"- {m['balls']} ball{'' if m['balls'] == 1 else 's'} hit this season over "
+                       f"{len(ss)} session{'' if len(ss) == 1 else 's'}"
+                       + (f"; most often with {who}" if who else "") + ".")
+        else:
+            out.append("- No balls hit in this season yet.")
+        if m.get("carried"):
+            out.append(f"- **{int(m['carried'])} of the {practice_of(book, name)} balls it brings were carried in "
+                       f"from before this season**, not hit here. The rates below are this season's sessions only.")
+        if not ss:
+            out += ["- No session in this season yet, so there is nothing to rate and nothing to improve on.", ""]
+            continue
+        in_play = sum(int(s.get("in_play") or 0) for s in ss)
+        of = sum(int(s.get("of") or 0) for s in ss)
+        out.append(f"- {in_play}/{of} balls in play ({100.0 * in_play / of:.0f}%)." if of else
+                   "- no ball was struck in these sessions")
+        means = [float(s.get("mean_rally") or 0) for s in ss]
+        scores = [s["score"] for s in ss if isinstance(s.get("score"), list)]
+        out.append(f"- mean rally {sum(means) / len(means):.1f} shots, longest "
+                   f"{max(int(s.get('longest') or 0) for s in ss)}, over {len(ss)} "
+                   f"session{'' if len(ss) == 1 else 's'}"
+                   + (f"; the game was {scores[0][0]}–{scores[0][1]}" if len(scores) == 1 else
+                      f"; the games were " + ", ".join(f"{a}–{b}" for a, b in scores) if scores else "") + ".")
+        # THE MIX. Sessions that carry it are the evidence; sessions that do not are named as gaps.
+        mixed = [(s.get("when"), s["faults"]) for s in ss if isinstance(s.get("faults"), dict)]
+        gaps = len(ss) - len(mixed)
+        if not mixed:
+            out.append("- No session in this season carries a fault mix, so this report cannot say how the points "
+                       "were lost. The field arrived on 2026-11-27; a season from before it has no count, and no "
+                       "count is not a clean sheet.")
+        else:
+            tot: dict[str, int] = {}
+            for _when, mix in mixed:
+                for k, v in mix.items():
+                    tot[k] = tot.get(k, 0) + int(v)
+            out.append(f"- points lost, in the words a player corrects: {mix_phrase(tot)}.")
+            if len(mixed) == 1:
+                out.append("- One session carries a mix, and one session is a reading: the second is what turns "
+                           "this into a trend.")
+            else:
+                first, last = mixed[0][1], mixed[-1][1]
+                a, b = int(first.get("unreachable", 0)), int(last.get("unreachable", 0))
+                if a == b:
+                    out.append(f"- balls not got to: {a} → {b} over {len(mixed)} sessions — unmoved, and a trend "
+                               f"that has not moved is not a result.")
+                else:
+                    out.append(f"- balls not got to: {a} → {b} over {len(mixed)} sessions — "
+                               f"{abs(b - a)} {'fewer' if b < a else 'more'}.")
+            if gaps:
+                out.append(f"- {gaps} session{'' if gaps == 1 else 's'} in this season "
+                           f"{'carries' if gaps == 1 else 'carry'} no mix and {'is' if gaps == 1 else 'are'} left "
+                           f"out of that line rather than counted as days without a fault.")
+        out.append("")
+    return "\n".join(out)
+
+
 def engines_for(names: list[str], args) -> tuple[dict, list[str]]:
     """One vendor and one model per named member: its own voice.md unless the flags say otherwise, and the names
     of the keys that are missing. A person's seat is never in this list — it has no engine to look up."""
@@ -2131,10 +2383,11 @@ def write_session(book: dict, args, names: list[str], result: dict, mode: str, b
         for n in team:
             partners[n] = [o for o in team if o != n]
     record_session(book, when=when, surface=result["surface"], clock=result["clock"],
-                   faults=fault_mix({"rallies": result["rallies"]}),
+                   faults=fault_mix({"rallies": result["rallies"]}), score=result.get("score"),
+                   teams=[names[:2], names[2:]],
                    players=list(result["players"].values()), results=result["results"],
                    lengths=result["lengths"], partners=partners, mode=mode, by=by)
-    save_season(book, args.season, args.season_dir, "pickleball")
+    save_season(book, args.season, args.season_dir, "pickleball", report=report)
 
 
 def run_person_pb(args) -> int:
@@ -2255,6 +2508,12 @@ def main(argv=None) -> int:
                     help="record the first game and write the film to this JSON path")
     ap.add_argument("--page", default=None,
                     help="with --film, also bake the film into a standalone page at this path")
+    ap.add_argument("--then-now", default=None, metavar="NAME", dest="then_now",
+                    help="film the same pinned game twice — that member's hands coming into this season and its "
+                         "hands now — and bake both into one page: what practice looks like on screen")
+    ap.add_argument("--verbose", action="store_true", help="with --then-now, print the shot-by-shot transcript")
+    ap.add_argument("--note", default=None,
+                    help="a sentence to carry in the film's own note — for a demonstration, say what it is")
     ap.add_argument("--trend", default=None, metavar="NAME",
                     help="print one person's points-lost mix across every season on this bench, oldest first; "
                          "reads the season files and plays nothing")
@@ -2265,14 +2524,15 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default=None)
     args = ap.parse_args(argv)
 
+    if args.then_now:
+        return run_then_now(args)
     if args.trend:
         print(trend_table(args.trend, season_mix(args.trend)))
         return 0
     if args.rules:
         return cmd_rules(argv)
     if args.report:
-        from tennis import season_report
-        print(season_report(args.report, args.season_dir, "pickleball"))
+        print(report(args.report, args.season_dir))
         return 0
     names = [n.strip() for n in args.names.split(",")]
     if len(names) != 4:

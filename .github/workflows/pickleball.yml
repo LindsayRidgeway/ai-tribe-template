@@ -39,6 +39,10 @@ on:
         description: "pin the wind to a millisecond count, so the same game can be played again — blank is now"
         required: false
         default: ""
+      then_now:
+        description: "watch: 'yes' films the same game twice — your hands coming into this season and your hands now — instead of playing a session"
+        required: false
+        default: ""
       surface:
         description: "the court"
         type: choice
@@ -74,6 +78,7 @@ jobs:
           PERSON: ${{ inputs.person }}
           PLAYERS: ${{ inputs.players }}
           SHOT: ${{ inputs.shot }}
+          THEN_NOW: ${{ inputs.then_now }}
         run: |
           set -euo pipefail
           case "$SEASON" in
@@ -82,10 +87,13 @@ jobs:
           if [ -z "$PERSON" ]; then
             echo "::error::a person's seat needs a name — fill in 'person'"; exit 2
           fi
-          case "$SHOT" in
-            PACE*) : ;;
-            *) echo "::error::the movement is a movement, not a wish: PACE 24 AT 26,6"; exit 2 ;;
-          esac
+          # A watch run plays no movement of yours, so it is not asked for one; a session is.
+          if [ "$THEN_NOW" != "yes" ]; then
+            case "$SHOT" in
+              PACE*) : ;;
+              *) echo "::error::the movement is a movement, not a wish: PACE 24 AT 26,6"; exit 2 ;;
+            esac
+          fi
           who="${PLAYERS:-}"
           if [ -z "$who" ]; then
             # The shelf, minus the bench's fixtures, in the order lab/members.py publishes it. `awk`, not `head`,
@@ -109,6 +117,8 @@ jobs:
       - name: Play
         env:
           SEASON: ${{ inputs.season }}
+          PERSON: ${{ inputs.person }}
+          THEN_NOW: ${{ inputs.then_now }}
           SHOT: ${{ inputs.shot }}
           GAMES: ${{ inputs.games }}
           CLOCK: ${{ inputs.clock }}
@@ -126,9 +136,20 @@ jobs:
           TRIBE_API_KEY_ALIBABA: ${{ secrets.TRIBE_API_KEY_ALIBABA }}
         run: |
           set -euo pipefail
-          args=(--person-shot "$SHOT" --names "$NAMES" --season "$SEASON" --game "$GAMES" --surface "$SURFACE"
-                --film "games/pickleball/records/$SEASON-game-1.json"
-                --page "games/pickleball/replays/$SEASON-game-1.html")
+          if [ "$THEN_NOW" = "yes" ]; then
+            # THE WATCHING FILM (page §5ac): the same pinned game twice, your hands coming into this season and your
+            # hands now, everything else held still. Scripted dink hands rather than the members' own engines, on
+            # purpose: the point of the film is that the only thing changing between the halves is reach, and a
+            # different shot selection in each half would be a second cause with a nicer name.
+            args=(--then-now "$PERSON" --names "$NAMES" --season "$SEASON" --surface "$SURFACE" --level dink
+                  --film "games/pickleball/records/$SEASON-then-now.json"
+                  --page "games/pickleball/replays/$SEASON-then-now.html"
+                  --note "played by the engine's scripted dink hands; the halves differ only in $PERSON's practice, as the season records it")
+          else
+            args=(--person-shot "$SHOT" --names "$NAMES" --season "$SEASON" --game "$GAMES" --surface "$SURFACE"
+                  --film "games/pickleball/records/$SEASON-game-1.json"
+                  --page "games/pickleball/replays/$SEASON-game-1.html")
+          fi
           [ -n "$CLOCK" ] && args+=(--clock "$CLOCK")
           true
           # No vendor flag and no practice flag: each member's engine is in its own voice.md, and the balls each one

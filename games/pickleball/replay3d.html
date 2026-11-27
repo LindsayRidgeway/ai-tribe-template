@@ -514,7 +514,11 @@ function caption(r, si, t) {
   const kind = s ? (s.kind === "groundstroke" ? "shot" : s.kind) : "";
   const line1 = `rally <b>${r.n}</b> <span class="dim">(${ri + 1}/${rallyList.length})</span> · ` +
                 `${r.shots.length} shots · ${scene.teams[0].join("/")} ${rec ? rec.score[0] : 0} - ` +
-                `${rec ? rec.score[1] : 0} ${scene.teams[1].join("/")}`;
+                `${rec ? rec.score[1] : 0} ${scene.teams[1].join("/")}` +
+                /* A film can hold two games — the same clock at two hands (§5ab) — and a viewer needs to know which
+                   half they are watching, from the caption rather than from memory. The label rides on the rally
+                   line the engine wrote, so the picture cannot disagree with the file about whose hands these are. */
+                (rec && rec.label ? ` · <span class="dim">${rec.label}</span>` : "");
   const line2 = s ? `<b>${s.shot + 1}. ${s.player}</b> · ${kind} · ${s.speed} mph · face ${s.face > 0 ? "+" : ""}${s.face}°` +
                     ` · aim ${s.aim} ft · <span class="dim">${t.toFixed(2)}s</span>`
                   : `<span class="dim">the serve is about to be struck</span>`;

@@ -876,20 +876,26 @@ def load_season(season: str, override: str | None = None, sport: str = "tennis")
     return json.loads(f.read_text(encoding="utf-8"))
 
 
-def save_season(book: dict, season: str, override: str | None = None, sport: str = "tennis") -> Path:
+def save_season(book: dict, season: str, override: str | None = None, sport: str = "tennis",
+                report=None) -> Path:
+    """Write the season and its report. `report=` is how a sport other than tennis writes its own sentences: the
+    rule that a report is a function of the record is the same for every sport, and the units are not (page §5z)."""
     d, f = season_paths(season, override, sport)
     d.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(book, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     # report.md is a function of practice.json, written here and never by hand. The colony's first season had a
     # report somebody typed, which is exactly the class of file the derivability test exists to catch: a page
     # that can drift from the record it claims to summarise.
-    (d / "report.md").write_text(season_report(season, override, sport), encoding="utf-8")
+    (d / "report.md").write_text((report(season, override) if report else season_report(season, override, sport)),
+                                 encoding="utf-8")
     return f
 
 
 def record_session(book: dict, *, when: str, surface: str, clock: int, players, results, lengths,
                    partners: dict, mode: str = "rally", competition: bool = None,
                    faults: dict[str, dict[str, int]] | None = None,
+                   score: tuple[int, int] | None = None,
+                   teams: list[list[str]] | None = None,
                    by: str = "a person") -> None:
     """Add one session to the book. The balls are the ones the ENGINE counted, not the ones a member
     claims — a being that inflates its own practice should be findable in the record, and here it cannot
@@ -920,6 +926,16 @@ def record_session(book: dict, *, when: str, surface: str, clock: int, players, 
             # that has no mix must not appear to have one, and a season recorded before this field has no key at
             # all, which is what lets a reader tell "no faults" from "not counted".
             **({"faults": dict(faults.get(p.name, {}))} if faults is not None else {}),
+            # THE GAME'S OWN NUMBER, when the session was one game rather than an evening. A pickleball report that
+            # lists the balls and the rally length and not the score is a report with the one fact a person looks
+            # for left out; the film has it, and the film is not what a season is read from (page §5z).
+            **({"score": [int(score[0]), int(score[1])]} if score is not None else {}),
+            # WHO WAS ON WHICH SIDE. `with` already says who was beside you, and says nothing about who was
+            # across the net or which half of the score was yours — so a report could only ever say "played with
+            # Desi" about a game that was 11–2, which is a fact about a partnership and not about a game. The two
+            # sides, in the order the score is written in, make the session a game rather than a bullet under one
+            # player's name (page §5z).
+            **({"teams": [list(t) for t in teams]} if teams else {}),
         })
         m["balls"] += p.shots
 
@@ -965,12 +981,23 @@ def season_report(season: str, override: str | None = None, sport: str = "tennis
     matters is the one on the middle case: with two sessions and a rate that did not move, this prints
     that it cannot say the game improved. A report generator that congratulates a player who did not
     improve is a fiction generator with a citation bolted on."""
-    book = load_season(season, override)
-    d, f = season_paths(season, override)
+    book = load_season(season, override, sport)
+    d, f = season_paths(season, override, sport)
     try:
         shown = f.relative_to(ROOT)
     except ValueError:
         shown = f
+    if sport != "tennis":
+        # The `sport` argument was accepted and ignored until 2026-11-27: a pickleball season asked for its report
+        # came back reading `games/tennis/seasons/<season>/practice.json` and saying nobody had hit a ball, while
+        # the season sat in `games/pickleball/seasons/` beside it — the most expensive kind of defect, an argument
+        # that is accepted and does nothing (page §5z). This function writes tennis's sentences: a rate that means
+        # shots per rally, a rule about groups, a stance learned. So it now names the file it was asked about and
+        # hands the work to the sport, rather than answering in units nobody played.
+        return (f"# {season} — what the record says\n\n"
+                f"From `{shown}`. This is {sport}'s season, and this function writes tennis's sentences — a rate "
+                f"that means shots per rally, a competition rule about groups, a stance learned — so it will not "
+                f"describe it. {sport} has its own report: `python3 lab/{sport}.py --report {season}`.\n")
     if not book.get("members"):
         return (f"No season at {shown}. Nobody has hit a ball in {season} yet, so there is nothing to "
                 f"report and nothing to cite.")
