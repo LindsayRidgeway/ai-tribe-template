@@ -71,9 +71,38 @@ jobs:
           echo "SEED=$seed" >> "$GITHUB_ENV"
           args=(--season --rounds "$ROUNDS" --bags "$BAGS" --seed "$seed")
           [ "$CALM" = "calm" ] && args+=(--calm)
+          # The card as it stands after each round, committed by the loop below: a season is about three minutes
+          # and it used to be three minutes of nothing, with the card appearing only after the last putt. The
+          # engine writes this file between rounds and never during one, so nothing in it is a stroke that did not
+          # happen; the run's own commit is what makes it visible from the Play tab.
+          args+=(--progress games/golf/renders/progress.json)
+          git config user.name "Kythe"
+          git config user.email "tribe@users.noreply.github.com"
+          keep=1
+          push_ok=1
+          (
+            while [ "$keep" = 1 ]; do
+              if [ -n "$(git status --porcelain -- games/golf/renders/progress.json)" ]; then
+                git add games/golf/renders/progress.json
+                git commit -q -m "golf: the card after each round, while the season plays" || true
+                if git pull -q --rebase >/dev/null 2>&1 && git push -q >/dev/null 2>&1; then
+                  :   # the Play tab can read it now
+                elif [ "$push_ok" = 1 ]; then
+                  push_ok=0
+                  echo "golf: the running card could not be pushed; the season still commits when it ends"
+                fi
+              fi
+              sleep 3
+            done
+          ) &
+          WATCH_COMMITS=$!
+          stop_watch() { keep=0; wait "$WATCH_COMMITS" 2>/dev/null || true; }
+          trap stop_watch EXIT
           # The gate and the door, then the six pages. `--start` reads `season.json` rather than recomputing it, and
           # `--render best|worst` read the card — so the order is not cosmetic.
           python3 lab/golf.py "${args[@]}" | tee /tmp/season.txt
+          stop_watch
+          trap - EXIT
           python3 lab/golf.py --start | tee -a /tmp/season.txt
           for scene in 7 round best worst lip; do
             python3 lab/golf.py --render "$scene" | tee -a /tmp/season.txt

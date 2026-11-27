@@ -759,6 +759,18 @@ press draws a new seed, so it is a new nine holes rather than the same one again
 then reads *your* circle's numbers instead of the project's. Before that first press, the card says plainly that the
 numbers are the project's: golf's athletes are fixed and no member of your circle plays it.
 
+**And you can watch it happen.** A season is four rounds and about three minutes, and until 2026-11-27 those three
+minutes were a spinner: the engine wrote the card once, at the end. Now the engine writes the card it has *after each
+round* — never during one, so no number in it is a stroke that did not happen — and the run commits that file between
+rounds. The tab shows it above the record: *round 2 of 4*, the six athletes in the order they stand at that moment,
+because the lead changes hands and that is the reason to watch, each one's to-par round by round so far, and their
+strokes. When the last round lands, the card above is replaced by the real one, and the running file is deleted by the
+season that finished it. If a run dies part way, the file stays — and the page says so in those words ("round 2 of 4,
+and that is where it stopped"), because a card from forty minutes ago is not a season playing now, and a page that
+called it one would be inventing a present tense. One thing is worth knowing: the watching lives in the *workflow*,
+so a circle whose golf workflow predates 2026-11-27 keeps playing and keeps writing its record, and simply does not
+show the rounds arriving. **Update** in Settings brings the current one, and the next season is watchable.
+
 A circle made before golf existed does not have to be updated first. The press checks for the four files golf needs —
 the engine, the putting module it borrows, the player that draws a scene, and the workflow — writes whatever is
 missing from the template, says how many it added, and then plays. Files you have edited here are never overwritten;
@@ -784,10 +796,11 @@ what makes a game a game — whether a thrown die moves a member's pick, whether
 they are kept because the records are the evidence. They are not offered as things to play tonight, and the page
 does not pretend otherwise.
 
-**What this chapter does not have yet:** a choice of games on the page, and a view of a session while it happens —
-the page shows the season's report when the run comes back, not the rallies as they are played. Two games are on the
-page now (tennis, which you start, and golf, whose record you read) and both are one form and one shelf. Gwen asked
-for the first two in her probe of 2026-11-10, and these are the honest gaps here.
+**What this chapter does not have yet:** the *rallies* of a tennis session as they are played. Golf's season became
+watchable on 2026-11-27 (the paragraph above: rounds committed as they land), and tennis is the same shape of work and
+not yet done — a season is played in one process and the record appears when the run comes back. Three games are on the
+page now: tennis, which you start; golf, whose season you press and can now watch; and pickleball, which is a court you
+play yourself. Gwen asked for the first two in her probe of 2026-11-10, and these are the honest gaps here.
 
 **One thing to know before you read the numbers.** Two members play each other and only each other, so a
 percentage is a result *against that opponent*, not a score for a member in the abstract. Against a stronger
@@ -1182,8 +1195,12 @@ of them was on the missing list, and none of them is missing.
    by the page and by the wake alike. What is not built, and is the smaller gap: **nobody has measured most of the
    engines.** Only one vendor and three local models have been pointed at a picture, so the button refuses Gemini,
    OpenAI, Anthropic and the rest until somebody with a key runs one command.
-2. **A choice of games** (§7), and a session you can watch while it happens. There is one game on the page and a
-   report at the end, not a running table.
+2. **A session you can watch while it happens** (§7) — **half built 2026-11-27.** A golf season played from the
+   page now shows itself round by round: the engine writes the card after each round, the run commits it, and the tab
+   reads it, so there is a table that fills in and reorders instead of three minutes of spinner. What is not built is
+   the same for **tennis**, whose season is still one process that reports at the end — the same shape of work, not
+   the same file. A choice of games is less missing than it was: tennis, golf and pickleball are all on the tab now,
+   though two of the three are things you press rather than things you play.
 3. ~~**A clock you own.**~~ **Ruled out, not built, and the reason is in §5.** A timer outside GitHub does work —
    one was built, installed on a real circle on 2026-11-22, and delivered its wakes — and it is still not offered
    here: it needs a second account and a long-lived token living outside your repository, and it is a page whose

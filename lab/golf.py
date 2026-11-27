@@ -117,12 +117,27 @@ SAND_PEN = 1.70                  # the athlete's price for a ball in the sand, i
 # What is still flat: the turf beyond 20 ft (a 24 ft landing is priced at 20 ft's 1.93; golf is about 2.0
 # there and the row cannot be measured cleanly on this green, so it is a stated tail and not a number), the
 # rough (a chip's cost genuinely does not move with distance: 2.45 to 2.6 from 36 ft to 60), and the sand on
-# top of the green's price. What is averaged away: direction. A 12 ft putt costs 1.50 up the fall line and
-# 2.17 across it -- 0.67 strokes, nearly as large as the whole 2-to-20 ft gradient this pass just acquired --
-# and `target()` prices every 12 ft landing at 1.83. Pass 19 gave the landing a second *axis* — depth, so the
-# ellipse and the club's shortfall are priced — and that is not the same thing: this is direction, along and
-# across the fall line, and the objective has no idea which way the green tilts. It is the largest thing left
-# wrong in the objective ("where it stops", item 6).
+# top of the green's price. What is averaged away: direction — and pass 20 measured it properly, because the
+# line above used to end "It is the largest thing left wrong in the objective" and that turned out to be wrong.
+#
+# `--costs` now fits two terms together against the compass the fall line defines: cosψ, the putt running down
+# the slope over one running up it, and sin²ψ, one square across the slope over one along it, ψ the angle
+# between the putt and the fall line. The break is +0.45 ± 0.07 of a stroke, one number across 3 to 20 ft
+# (χ² 6.6 on 5), and the downhill putt is +0.02 ± 0.03 — nothing. Two things follow, and the second is the
+# pass.
+#
+# The break cannot be sold to this objective. A landing at lateral offset a from the pin and depth b has
+# sin²ψ = (a+b)²/2(a²+b²), and its mirror at −b has exactly 1 minus that, so a landing as likely short as long
+# averages to ½ in depth and a direction term is the same number for every lateral cell: the aim does not move
+# and the price does not change. Wiring it in as a candidate moves a 150 yd aim by no feet and buys under a
+# ten-thousandth of a stroke (selftest, check 40). So `target()` is told the mean curve on purpose, and
+# "direction is averaged away" is arithmetic rather than neglect.
+#
+# What is wrong is one surface down. In golf "keep it below the hole" is the first thing anybody is told about
+# a green, and it is worth something because a downhill putt that misses is a longer, faster comeback. This
+# game's putter has no such penalty (measured; selftest check 41), because `GolfPutter.settle` trades reaching
+# the hole against arriving at capture speed and never prices the putt it leaves. That is the next object, and
+# the objective will need to be told the green on the day it is fixed.
 COST_OFF_GREEN = 2.60            # a chip, then a putt: flat, measured 2.45 at 36 ft and 2.6 at 60
 GREEN_COST_KNOTS = ((2.0, 1.03), (3.0, 1.14), (4.0, 1.35), (6.0, 1.43), (9.0, 1.65),
                     (12.0, 1.83), (16.0, 1.83), (20.0, 1.90))
@@ -732,7 +747,10 @@ class Athlete:
             centre   aim at the middle of the green, which is what a caddie says.
             spread   aim where the ball is *cheapest to hole out from*, given the scatter it has measured:
                      ∫ P(landing in x) · cost(the pin from x) dx, where the cost of a landing on the green
-                     is the measured curve `green_cost(distance to the pin)`, off it is COST_OFF_GREEN, and
+                     is the measured curve `green_cost(distance to the pin)` — the *mean* over bearings, and
+                     deliberately not the direction: see the note above `GREEN_COST_KNOTS` for the measurement
+                     that makes direction worthless here and the defect that would make it worth something —
+                     off it is COST_OFF_GREEN, and
                      in the sand is the green's price at that distance plus the athlete's own price.
 
         Nothing here is learning. It is what the learned numbers are *for* — a player who knows how much it
@@ -1883,6 +1901,124 @@ def selftest() -> int:
           f"{sloped:.2f} ft; on the same green flattened it is {flat * 12:.2f} in. The bow is what a visitor is "
           f"being shown, so it had better be the roll's")
 
+    # 39. pass 20: which way a putt runs, played through the game. `--costs` measures the break in bands at six
+    #     distances; this measures it at one, on the compass the fall line actually defines, and asks whether the
+    #     game agrees with the curve the objective is told. A term wired to the wrong axis, or a curve that has
+    #     stopped being the bearing average of this green, fails here.
+    def played_at(d_ft: float, bearing: float, streams: int) -> float:
+        hh = Hole(400, 4, "C", pin=0.0, sand=0)
+        a = math.radians(bearing)
+        p_ = (hh.flag[0] + math.sin(a) * d_ft, hh.flag[1] + math.cos(a) * d_ft)
+        return _mean([play_hole(hh, copy_of(ath), GolfPutter(), green, learn=False, verbose=False, start=p_,
+                                rng=random.Random(DEFAULT_SEED + 997 * st + 97 * int(bearing) + int(10 * d_ft)))
+                      ["strokes"] for st in range(streams)])
+    along_c = _mean([played_at(12.0, b, 6) for b in (green.downhill, green.downhill + 180.0)])
+    across_c = _mean([played_at(12.0, b, 6) for b in (green.downhill + 90.0, green.downhill - 90.0)])
+    four_c = (along_c + across_c) / 2.0
+    check("the green is dearer across the fall line than along it, and the curve is their mean",
+          across_c - along_c > 0.3 and abs(four_c - green_cost(12.0)) < 0.25,
+          f"played out from 12 ft: {along_c:.2f} strokes with the putt running along the fall line, "
+          f"{across_c:.2f} square across it — {across_c - along_c:.2f} of a stroke at one distance, against "
+          f"0.28 to 0.80 and a pooled 0.45 in `--costs`. The four bearings average {four_c:.2f} against the "
+          f"curve's {green_cost(12.0):.2f}: the curve is the bearing average, and the direction is what is "
+          f"spread around it")
+
+    # 40. and what the break is worth to the objective — measured by wiring it in as a candidate and looking at the
+    #     answer, because arithmetic done in a comment is not evidence. A landing at lateral offset a from the pin
+    #     and depth b has sin²ψ = (a+b)²/2(a²+b²) and its mirror at −b has exactly 1 minus that, so for a landing
+    #     that is as likely short as long the term is ½ for every lateral cell and moves nothing. The athlete's
+    #     depth is not quite symmetric — it believes its ball finishes 0.5% past the number it hit — and *that*,
+    #     not the green, is what a direction term would spend.
+    def mean_across(a_off: float, along0: float, s_al: float) -> float:
+        tot, w_tot, b = 0.0, 0.0, along0 - 4.0 * s_al
+        step = s_al / 12.0
+        while b < along0 + 4.0 * s_al - 1e-9:
+            b0, b1 = b, min(b + step, along0 + 4.0 * s_al)
+            w = _phi((b1 - along0) / s_al) - _phi((b0 - along0) / s_al)
+            bb = 0.5 * (b0 + b1)
+            d = math.hypot(bb, a_off)
+            tot += w * ((a_off + bb) ** 2 / (2.0 * d * d) if d > 1e-9 else 0.5)
+            w_tot += w
+            b = b1
+        return tot / w_tot
+    s_al40 = max(ALONG_FLOOR_FT, ath.sig_dist * 150.0)
+    sym = [mean_across(a_off, 0.0, s_al40) for a_off in (-10.0, 0.0, 5.0, 12.0)]
+    with_bias = [mean_across(a_off, ath.bias_dist * 150.0, s_al40) for a_off in (-10.0, 12.0)]
+    cand = dict(lie="green", d=0.0)
+
+    def land_candidate(self, hole, lat, alo):
+        """The version of `_landing` that prices the break, restored the moment the check is done."""
+        lie = self._lie_of(hole, lat, alo)
+        if lie == "off":
+            return COST_OFF_GREEN
+        d = math.hypot(alo, lat - hole.pin)
+        run = (lat - hole.pin) * math.sin(math.radians(green.downhill)) \
+            + alo * math.cos(math.radians(green.downhill))
+        across = 1.0 - (run / d) ** 2 if d > 1e-9 else 0.5
+        return green_cost(d) + 0.45 * (across - 0.5) + (self.sand_pen if lie == "sand" else 0.0)
+
+    h40 = Hole(150, 3, "T", pin=+13.0, sand=0)
+    ball40 = (0.0, h40.centre[1] - 150.0 * FT_PER_YD)
+    was40 = copy_of(ath)
+    t_before = was40.target(h40, ball40, 150.0)
+    v_before = dict((t, v) for v, t in was40.scores(h40, 150.0))[t_before]
+    orig_landing = Athlete._landing
+    Athlete._landing = land_candidate
+    try:
+        t_after = was40.target(h40, ball40, 150.0)
+        v_after = dict((t, v) for v, t in was40.scores(h40, 150.0))[t_after]
+    finally:
+        Athlete._landing = orig_landing
+    check("the break is worth a hundredth of a stroke to the objective, and what it spends is not the green",
+          all(abs(m - 0.5) < 1e-9 for m in sym) and abs(t_after - t_before) <= 1.0
+          and 0.0 <= v_before - v_after < 0.02,
+          f"depth-averaged sin²ψ with a symmetric landing, at lateral offsets −10 / 0 / +5 / +12 ft: "
+          f"{', '.join(f'{m:.9f}' for m in sym)} — ½ to the ninth decimal for every one of them, so with an "
+          f"unbiased depth the term cannot move an aim at all. With the athlete's own learned bias it reads "
+          f"{with_bias[0]:.3f} and {with_bias[1]:.3f}, and wiring it in moves a 150 yd aim at a pin cut 13 ft "
+          f"right from {t_before:+.1f} ft to {t_after:+.1f} ft for {v_before - v_after:.5f} of a stroke. A "
+          f"thousandth of a stroke is not worth a term, and the term would be spending the athlete's 0.5% "
+          f"mis-estimate of its own depth rather than anything the green does. Written down because it is the "
+          f"pass's decision: the objective is told the *mean* curve on purpose")
+
+    # 41. the finding the pass is for, and it is a defect: this game's putter pays almost nothing for leaving the
+    #     ball above the hole. A downhill putt that misses runs further and the second putt is downhill too, so in
+    #     golf the pin is a wall you stay under; `--costs` fits +0.02 ± 0.03 for it over a whole compass. Measured
+    #     here through the game, pooled over distances, and asserted so that the record cannot quietly stop being
+    #     true — the same arrangement as check 21. The day the pace decision prices the putt it leaves, this fails
+    #     and every sentence that quotes it gets rewritten.
+    def by_dir(d_ft: float, down: bool, streams: int = 6) -> list[float]:
+        hh = Hole(400, 4, "C", pin=0.0, sand=0)
+        # the ball is placed so that its putt runs down the fall line (down) or back up it (up): the
+        # downhill *bearing* is where the slope falls toward, so a ball down-slope of the pin puts back up
+        a = math.radians(green.downhill + (180.0 if down else 0.0))
+        p_ = (hh.flag[0] + math.sin(a) * d_ft, hh.flag[1] + math.cos(a) * d_ft)
+        return [play_hole(hh, copy_of(ath), GolfPutter(), green, learn=False, verbose=False, start=p_,
+                          rng=random.Random(DEFAULT_SEED + 997 * st + 41 * int(10 * d_ft) + (5 if down else 7)))
+                ["strokes"] for st in range(streams)]
+    diffs, ses, parts = [], [], []
+    for d in (3.0, 6.0, 9.0, 12.0, 16.0, 20.0):
+        dn, up = by_dir(d, True), by_dir(d, False)
+        # the same ball rolled down the fall line and up it, paired: the difference of the means and its error
+        # computed from the two samples' own scatter, which is wider than the standard error of a difference
+        # computed as if they were independent — the seeds are not paired, so this is the conservative one
+        se = math.sqrt(_sd(dn) ** 2 / len(dn) + _sd(up) ** 2 / len(up))
+        diffs.append(_mean(dn) - _mean(up))
+        ses.append(se)
+        parts.append(f"{d:.0f} ft {diffs[-1]:+.2f}±{se:.2f}")
+    pooled_d = _mean(diffs)
+    pooled_se = math.sqrt(sum(v * v for v in ses)) / len(ses)
+    check("the pin is not a wall you stay under: above the hole costs this putter almost nothing",
+          abs(pooled_d) < 2.0 * pooled_se + 0.05 and abs(pooled_d) < 0.3,
+          f"downhill minus uphill, played from six distances: {'; '.join(parts)}; pooled {pooled_d:+.2f}±"
+          f"{pooled_se:.2f}. `--costs` fits the same thing over a whole compass and reads +0.02 ± 0.03, where "
+          f"the break the putter has to read is 0.45. In golf 'keep it below the hole' is the first thing anybody "
+          f"is told about a green, and it is worth something because a downhill putt that misses is a longer and "
+          f"faster comeback. This putter's pace (GolfPutter.settle) trades reaching the hole against arriving at "
+          f"capture speed and never prices the putt it leaves, so a downhill miss is priced by its length and not "
+          f"by the fact that its comeback runs away. That is the next object, and it is one surface down from the "
+          f"objective — which is why check 40's answer is that the objective is right as it stands")
+
     print(f"\n  {len(fails)} of {n} checks failed" if fails else f"\n  all {n} checks pass")
     return 1 if fails else 0
 
@@ -2193,22 +2329,87 @@ def costs_test(args) -> int:
     print(f"  held flat: a 24 ft compass keeps only 30 of its 72 positions and they are all up the long axis, so")
     print(f"  the row cannot be measured cleanly on this green and is a stated tail, not a number.")
 
-    print(f"\n  THE SAME COST BY DIRECTION, which a distance-only objective cannot hold (12 ft and 20 ft)")
-    for d in (12, 20):
-        quad = {q: [] for q in range(4)}
+    # Pass 20. Which way the green tilts, measured as a shape rather than as two quadrant means. The variable
+    # is sin²ψ and cosψ, ψ the angle between the putt and the fall line: sin² is 0 for a putt straight up or
+    # straight down the slope and 1 square across it, and cos is +1 for one running down the slope. Quadrants
+    # cannot tell a ramp from a ridge (0-90° holds sin² 0.5, 0.85 and 1), and two distances cannot say whether
+    # either term grows with the putt. Four bands of sin², six distances, every position used, and both terms
+    # fitted together because they are not independent questions about the same 24 bearings.
+    BANDS = ((0.0, 0.15, "along"), (0.15, 0.5, "0.15-0.5"), (0.5, 0.85, "0.5-0.85"), (0.85, 1.01, "across"))
+    print(f"\n  THE SAME COST BY DIRECTION, in bands of sin²ψ from the fall line ({green.downhill:.0f}°)")
+    print(f"  {'distance':>9s}   " + "".join(f"{lab:>18s}" for _lo, _hi, lab in BANDS)
+          + f"{'downhill':>10s}{'across':>10s}")
+    fits = {}
+    for d in (3, 6, 9, 12, 16, 20):
+        got = {lab: [] for _lo, _hi, lab in BANDS}
+        xs2, xsc, ys = [], [], []
         for st in range(ST):
             for b in range(B):
-                quad[int((360.0 * b / B) // 90.0)].append(played(d, h, b, st))
-        cells = "  ".join(f"{sum(v) / len(v):.2f}" for _, v in sorted(quad.items()))
-        spread = max(sum(v) / len(v) for v in quad.values()) - min(sum(v) / len(v) for v in quad.values())
-        print(f"  {d:5.0f}ft  {cells}   spread {spread:.2f}   "
-              f"(0-90°, 90-180°, 180-270°, 270-360° from the pin at the centre)")
-    print(f"  The fall line points at 135°, so the 90-180° quadrant is the ball above the hole putting back up")
-    print(f"  the slope and 270-360° is the reverse: an uphill putt is easier, which is the first time this game")
-    print(f"  has said anything golf agrees with about *which* putt a putt is. `target()` prices every 12 ft")
-    print(f"  landing at {green_cost(12.0):.2f}, so it is out by up to half a stroke on a single landing and the")
-    print(f"  average is right. Pass 19 gave the landing a depth and did not give it a slope: what is")
-    print(f"  missing is direction, and the objective has no idea which way the green tilts.")
+                ang = math.radians(360.0 * b / B - green.downhill)
+                s2, co = math.sin(ang) ** 2, -math.cos(ang)
+                # cosψ is +1 for a putt running *down* the fall line. The ball at bearing b from the pin is
+                # `ang` round from the fall line, and the putt travels back the other way, so it runs down the
+                # fall line when ang is 180°.
+                v = played(d, h, b, st)
+                xs2.append(s2)
+                xsc.append(co)
+                ys.append(v)
+                for lo, hi, lab in BANDS:
+                    if lo <= s2 < hi:
+                        got[lab].append(v)
+                        break
+        cells = "".join(f"{_mean(v):12.2f}±{_sd(v) / math.sqrt(len(v)):.2f}" if v else f"{'—':>15s}"
+                        for v in (got[lab] for _lo, _hi, lab in BANDS))
+        # Two terms, fitted together: cost = mean + A·cosψ + B·sin²ψ. Two regressors with no intercept, on
+        # variables that are centred by construction (a mean of zero over a circle for cosψ, ½ for sin²ψ, so
+        # the second is centred too). Normal equations, 2x2, no library.
+        n_d = len(ys)
+        s11 = sum(x * x for x in xsc) - sum(xsc) ** 2 / n_d
+        s22 = sum((x - 0.5) * (x - 0.5) for x in xs2)
+        s12 = sum(x * (y - 0.5) for x, y in zip(xsc, xs2)) - sum(xsc) * sum(y - 0.5 for y in xs2) / n_d
+        t1 = sum(x * y for x, y in zip(xsc, ys)) - sum(xsc) * sum(ys) / n_d
+        t2 = sum((x - 0.5) * y for x, y in zip(xs2, ys))
+        det = s11 * s22 - s12 * s12
+        A = (t1 * s22 - t2 * s12) / det
+        Bc = (t2 * s11 - t1 * s12) / det
+        res = [y - _mean(ys) - A * x1 - Bc * (x2 - 0.5) for x1, x2, y in zip(xsc, xs2, ys)]
+        sig2 = sum(r * r for r in res) / max(1, n_d - 3)
+        seA = math.sqrt(sig2 * s22 / det)
+        seB = math.sqrt(sig2 * s11 / det)
+        fits[d] = (A, seA, Bc, seB)
+        print(f"  {d:7.1f}ft   {cells}   {A:+.2f}±{seA:.2f}  {Bc:+.2f}±{seB:.2f}")
+    print(f"  " + "; ".join(f"{d} ft: down {A:+.2f}±{sA:.2f}, across {Bc:+.2f}±{sB:.2f}"
+                            for d, (A, sA, Bc, sB) in fits.items()) + ".")
+    print(f"  {B} bearings x {ST} streams a distance, two terms fitted together: the cost of a putt running")
+    print(f"  DOWN the fall line over one running up it (cosψ), and the cost of one square ACROSS it over one")
+    print(f"  along it (sin²ψ). They are different questions and only one of them is worth anything here.")
+    # pooled: six independent distances are six estimates of the same two numbers
+    def pooled(k):
+        ws = [1.0 / fits[d][k + 1] ** 2 for d in fits]
+        vs = [fits[d][k] for d in fits]
+        m = sum(w * v for w, v in zip(ws, vs)) / sum(ws)
+        chi = sum(w * (v - m) ** 2 for w, v in zip(ws, vs))
+        return m, 1.0 / math.sqrt(sum(ws)), chi
+    (mA, seA_all, chiA), (mB, seB_all, chiB) = pooled(0), pooled(2)
+    print(f"  Pooled over the six distances: the break is {mB:+.2f}±{seB_all:.2f} of a stroke (χ² {chiB:.1f} on 5,")
+    print(f"  so one number and not a curve in distance) and the downhill putt is {mA:+.2f}±{seA_all:.2f} — that is,")
+    print(f"  leaving it above the hole costs this game's putter nothing measurable, where the break it has to")
+    print(f"  read is five times as large. In golf that is the first thing anybody is told about a green. In this")
+    print(f"  game it is not true: the putter's pace trades reaching the hole against arriving at capture speed")
+    print(f"  (GolfPutter.settle) and never prices the putt it leaves, so a downhill putt that misses is priced")
+    print(f"  by its length and not by the fact that its comeback runs away. That is the next thing to fix, and")
+    print(f"  it is the putter's, not the objective's.")
+    print(f"\n  AND WHY `target()` IS RIGHT TO IGNORE ALL OF IT. A landing at lateral offset a from the pin and")
+    print(f"  depth b has sin²ψ = (a+b)² / 2(a²+b²); the mirror landing at depth −b has 1 minus that. The")
+    print(f"  athlete's depth is a normal about a bias that is under a tenth of its own scatter, so b is as")
+    print(f"  likely one way as the other and the pair sums to exactly 1: the depth-averaged break, for every")
+    print(f"  lateral cell, is ½ — the curve's own mean. The objective prices the depth integral only, so a")
+    print(f"  direction term in `_landing` would add {mB:.2f}·(across − ½) to every cell and nothing to any")
+    print(f"  difference between cells: an aim bought for a stroke of compute and returning zero. The silence")
+    print(f"  about direction is therefore arithmetic rather than an omission, and it stops being right the day")
+    print(f"  the athlete can bias its depth, which is what the selftest's check on this pins.")
+    print(f"  `--costs` reads a 12 ft landing at {green_cost(12.0):.2f} whichever way the putt runs, and the game")
+    print(f"  agrees with that number: the rows above straddle it by ±{mB / 2:.2f} and average it.")
 
     # the other two lies, measured where the compass is honest: the rough at 36 ft and beyond, where every
     # bearing is off the green in every direction, and the sand at whatever distances a ball can be in it
@@ -2427,6 +2628,43 @@ def _hole_json(hole: Hole) -> dict:
 SEASON_COLOURS = ("#2f6f4e", "#8c2f39", "#2c5f8a", "#8a6a1f", "#6b4b8a", "#7a7a7a")
 
 
+def write_progress(path: Path, field, raw, done: int, rounds: int, bags: int, par: int) -> None:
+    """The card as it stands after `done` rounds — what a person watching the run reads.
+
+    Two decisions here are the whole of this file's honesty about being watched. It is written only between rounds,
+    so nothing in it is a stroke that did not happen; and the athletes are ordered by how they stand *now*, which is
+    what makes it a leaderboard rather than a table that happens to be half filled. It is not the record: `season.json`
+    is, and it is written once, at the end, from the same numbers.
+
+    The file is deleted when the season finishes, so its presence means a season is in progress or was interrupted
+    — and `when` is in it so a page can tell those two apart without guessing.
+    """
+    import datetime as _dt
+    athletes = []
+    for name, policy, learns, _prior, _sigma in field:
+        to_par = [round(_mean([raw[name][bag][r]["to_par"] for bag in range(bags)]), 2) for r in range(done)]
+        strokes = round(_mean([sum(raw[name][bag][r]["strokes"] for r in range(done)) for bag in range(bags)]), 1)
+        athletes.append(dict(name=name, policy=policy, learns=learns, to_par=to_par, strokes=strokes))
+    athletes.sort(key=lambda a: a["strokes"])
+    data = dict(schema="golf-progress/1", when=_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                rounds=rounds, bags=bags, par=par, done=done, athletes=athletes)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".part")
+    tmp.write_text(json.dumps(data, indent=1) + "\n")
+    tmp.replace(path)          # a commit loop reads this file; it never sees half of it
+
+
+def render_dir() -> Path:
+    """Where this game's record goes: `games/golf/renders/` under the project this file lives in.
+
+    A function rather than three copies of the same expression, because the tests have to be able to point it at a
+    temporary directory. Found the hard way on 2026-11-27: the new watching tests called `season()` in-process, which
+    wrote a two-round card over the project's committed four-round one — a test run silently replacing the record it
+    was supposed to be checking. The record is the product here; a suite that edits it is worse than no suite.
+    """
+    return Path(__file__).resolve().parent.parent / "games" / "golf" / "renders"
+
+
 def season(args) -> int:
     """Six athletes, many rounds, a few bags — each one's belief about itself beside its card, on one page.
 
@@ -2452,21 +2690,40 @@ def season(args) -> int:
         return dict(mean=round(m, 3), lo=round(m - 1.96 * se, 3), hi=round(m + 1.96 * se, 3))
 
     athletes, raw = [], {}
-    for i, (name, policy, learns, prior, sigma) in enumerate(FIELD):
-        per_bag = []
-        for bag in range(bags):
-            ath = Athlete(prior=prior, sigma_taught=sigma)
+    # **Round-outer, not athlete-outer**, since 2026-11-27. The card is read round by round — "over par, round 1"
+    # beside "over par, round 4" — and a season somebody can *watch* has to be able to say where it has got to after
+    # each round, so the loop has to reach the end of a round before it leaves it. Nothing about the arithmetic
+    # changes: each bag is still one athlete carried across all the rounds (that object is where learning lives, and
+    # it is created once and played through), and every draw is seeded by `(bag, round)` rather than by position in
+    # a loop. The same seed therefore gives the same season to the byte, which `tests.py` asserts against a stored
+    # card rather than against my memory of one.
+    plays = {name: [Athlete(prior=prior, sigma_taught=sigma) for _ in range(bags)]
+             for name, _p, _l, prior, sigma in FIELD}
+    for name, policy, _learns, _prior, _sigma in FIELD:
+        for ath in plays[name]:
             ath.policy = policy
-            rows = []
-            for r, course in enumerate(courses):
+    raw: dict[str, list[list[dict]]] = {name: [[{} for _ in range(rounds)] for _ in range(bags)]
+                                        for name, *_ in FIELD}
+    progress_path = Path(args.progress).resolve() if getattr(args, "progress", "") else None
+
+    for r, course in enumerate(courses):
+        for name, policy, learns, prior, sigma in FIELD:
+            for bag in range(bags):
+                ath = plays[name][bag]
                 res = play_round(course, ath, GolfPutter(), green, learn=learns, verbose=False,
                                  rng=random.Random(args.seed + 7919 * bag + r))
-                rows.append(dict(to_par=res["to_par"], strokes=res["strokes"],
-                                 putts=sum(row["putts"] for row in res["rows"]),
-                                 gir=sum(1 for row in res["rows"] if row["gir"]),
-                                 sigma=round(ath.sigma, 3), aim_bias=round(ath.aim_bias, 3),
-                                 nerr=round(res["nerr"], 4)))
-            per_bag.append(rows)
+                raw[name][bag][r] = dict(to_par=res["to_par"], strokes=res["strokes"],
+                                         putts=sum(row["putts"] for row in res["rows"]),
+                                         gir=sum(1 for row in res["rows"] if row["gir"]),
+                                         sigma=round(ath.sigma, 3), aim_bias=round(ath.aim_bias, 3),
+                                         nerr=round(res["nerr"], 4))
+        if progress_path:
+            # Written after a round is complete and never during one: a half-played round is not a fact about a
+            # golfer, and a page that showed one would be reporting strokes that did not happen.
+            write_progress(progress_path, FIELD, raw, r + 1, rounds, bags, par)
+
+    for i, (name, policy, learns, prior, sigma) in enumerate(FIELD):
+        per_bag = raw[name]
 
         def series(key: str) -> list[dict]:
             return [stat([b[r][key] for b in per_bag]) for r in range(rounds)]
@@ -2476,7 +2733,6 @@ def season(args) -> int:
             to_par=series("to_par"), sigma=series("sigma"), nerr=series("nerr"), putts=series("putts"),
             total=stat([sum(b[r]["strokes"] for r in range(rounds)) for b in per_bag]),
             bias=stat([b[rounds - 1]["aim_bias"] for b in per_bag])))
-        raw[name] = per_bag
 
     # The score panel is *paired to the frozen player*: every athlete meets the same course in the same round, so
     # what a round's weather did to one it did to all, and the difference cancels it. Plot the raw score and the
@@ -2492,9 +2748,13 @@ def season(args) -> int:
                 pin_range=args.pin_range, athletes=athletes,
                 course=[dict(label=h.label, yards=h.yards, par=h.par, pin=round(h.pin, 1), sand=h.sand)
                         for h in courses[0]])
-    out_dir = Path(__file__).resolve().parent.parent / "games" / "golf" / "renders"
+    out_dir = render_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "season.json").write_text(json.dumps(data, indent=1) + "\n")
+    # The card is final, so the running one goes: a file that says "round 2 of 4" left lying beside a finished
+    # season is the kind of record that gets read as current.
+    if progress_path and progress_path.exists():
+        progress_path.unlink()
 
     note = f"the band is ± the 95% spread across {bags} practice sessions"
     legend = "".join(
@@ -2993,6 +3253,8 @@ def main(argv=None) -> int:
                     help="write renders/start.html: the door, and the card with its bars, from season.json")
     ap.add_argument("--season", action="store_true",
                     help="six athletes over many rounds, with each one's belief about itself, as a page")
+    ap.add_argument("--progress", metavar="PATH", default="",
+                    help="write the card as it stands after each round here (watched while a season plays)")
     ap.add_argument("--render", metavar="SCENE", default=None,
                     help="write a film: 'lip' for the bunker face, a hole number (--render 7), or 'round', "
                          "'best', 'worst' for the athlete's own card played back")

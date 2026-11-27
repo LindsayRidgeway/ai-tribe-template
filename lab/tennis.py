@@ -889,6 +889,7 @@ def save_season(book: dict, season: str, override: str | None = None, sport: str
 
 def record_session(book: dict, *, when: str, surface: str, clock: int, players, results, lengths,
                    partners: dict, mode: str = "rally", competition: bool = None,
+                   faults: dict[str, dict[str, int]] | None = None,
                    by: str = "a person") -> None:
     """Add one session to the book. The balls are the ones the ENGINE counted, not the ones a member
     claims — a being that inflates its own practice should be findable in the record, and here it cannot
@@ -913,6 +914,12 @@ def record_session(book: dict, *, when: str, surface: str, clock: int, players, 
             "longest": max(lengths) if lengths else 0,
             "control": round(p.skill("control"), 3),
             "reach": round(p.skill("reach"), 3),
+            # WHAT THE POINTS WERE LOST TO, when the sport keeps a mix. Pickleball's session record carried the
+            # reach and the control — two numbers that move by inches over hundreds of balls — and not the one
+            # number that moves by whole balls a game (page §5x). Optional, and absent rather than empty: a sport
+            # that has no mix must not appear to have one, and a season recorded before this field has no key at
+            # all, which is what lets a reader tell "no faults" from "not counted".
+            **({"faults": dict(faults.get(p.name, {}))} if faults is not None else {}),
         })
         m["balls"] += p.shots
 
