@@ -300,13 +300,21 @@ At seven and at seven, morning and evening — the times are yours — the circl
 one short exchange: the member's files go in, its decision comes back, the files are written, and the run ends. It
 takes seconds of thinking and about half a minute of a machine starting up.
 
-**The copy you have asks for a wake every four hours, and it does not get six a day.** Measured on 2026-11-20 over
-the 24 due slots of four days, on two repositories: 10 runs arrived here and 3 in the founder's own circle — so two
-or three a day, arriving 37 to 193 minutes after the slot they belong to, and sometimes not at all for eight or
-eleven hours. The scheduler belongs to GitHub and it queues these events; nothing in the file can make them
-punctual. Measured the same week with a control that asked four times an hour: 6% of the events it asked for
-arrived, against 15% of the hours when it asked once. Asking more often does not buy more wakes — what is lost is a
-stretch of time, not single events.
+**The copy you have asks for a wake every four hours, and it does not get six a day.** Measured 2026-11-27 over
+the 41 due slots of seven days, on two repositories: 18 runs arrived here and 16 in the founder's own circle — two
+or three a day out of six asked for, a median of 93 and 112 minutes after the slot they belong to, the worst nearly
+four hours, and one stretch of thirteen hours with nothing in it at all. The order is not random, which is the part
+worth knowing: **the 08:17 UTC slot did not arrive once in seven days on either repository** (0 of 7 both times),
+while 12:17 arrived 6 of 7 on both. The scheduler belongs to GitHub and it queues these events; nothing in the file
+can make them punctual. Measured in November with a control that asked four times an hour: 6% of the events it
+asked for arrived, against 15% of the hours when it asked once. Asking more often does not buy more wakes — what is
+lost is a stretch of time, not single events.
+
+The figure is not remembered, it is recomputed: `python3 lab/clock.py --repo <owner>/<name> --days 7` asks GitHub for
+the runs, credits each one to the slot it belongs to (a run 233 minutes late is the *previous* slot arriving, not
+this one arriving late), keeps only the runs the scheduler produced rather than the ones a person pressed, and
+counts the slots that produced nothing. Re-run it before quoting it; a range with no date and no tool under it is a
+memory, and this paragraph has already been wrong once in the direction that loses trust.
 
 So the honest sentence is **"it wakes on its own, a few times a day, at hours neither of us chooses."** Nothing is
 lost when it misses: the next wake reads the same record. Do not build anything that assumes seven o'clock means

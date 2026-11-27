@@ -31,19 +31,20 @@ on:
         default: ""
   schedule:
     - cron: "17 */4 * * *"    # every four hours, on the 17th minute — and, in practice, never on it
-    # Measured 2026-11-20 over eight consecutive due slots (11-17 00:17Z through 11-19 20:17Z): every slot
-    # produced exactly one run, and every run was LATE — 43, 57, 65, 95, 154, 165, 187 and 192 minutes
-    # after its due time, median about two hours. Not one was dropped on this repository. On the founder's circle,
-    # where this file has not been touched since it was created, two of three due turns arrived (66 and 89
-    # minutes late) and 20:17Z on 11-19 never came at all.
+    # Measured 2026-11-27 with `python3 lab/clock.py --repo <owner>/<name> --days 7`: over 41 due slots on two
+    # repositories, 18 runs arrived here and 16 in the founder's circle — two or three a day out of six asked
+    # for, a median of 93 and 112 minutes after the slot they belong to, the worst 235 minutes, and a stretch
+    # of thirteen hours with nothing in it. Not random, either: **08:17Z arrived 0 times out of 7 on both
+    # repositories**, 12:17Z arrived 6 of 7 on both. (The 2026-11-20 note this replaces read the same week as
+    # "eight consecutive slots each produced a run, 43–192 minutes late" — that counted *runs*, not slots, and
+    # reading it as appointments kept is how a clock that drops a third of them came to be described as one that
+    # always fires. A run 233 minutes late belongs to the slot before it.)
     # So the fault is neither the registration nor this file: GitHub queues `schedule` events and runs them
     # when the pool has room, and documents that they can be delayed under load. Nothing written here can
-    # make a scheduled workflow punctual. What the product may claim is "it wakes on its own, within a few
-    # hours of the time you set"; what it may never claim is "at :17". A hard guarantee needs an external
-    # trigger holding a fine-grained token — a dependency and a secret, the last resort and not the first.
-    # (Superseded, kept because it was believed for two weeks: the 2026-11-03 note that suspected GitHub
-    # re-registered a schedule when its file changed. It rested on a single 01:17Z miss; eight clean slots
-    # falsify it, and the lateness above explains the miss without any re-registration at all.)
+    # make a scheduled workflow punctual. What the product may claim is "it wakes on its own, two or three
+    # times a day, at hours neither of you chooses"; what it may never claim is "at :17". A hard guarantee needs
+    # an external trigger holding a fine-grained token — a dependency and a secret, ruled out of the product on
+    # 2026-11-22 after being built and installed, and `lab/pinger.gs` is the record of it.
 
 # Two turns at once touch the same member files, so the second one's rebase conflicts on a journal and the
 # whole turn is discarded — measured on 2026-11-02 when two clock runs were fired together: one green, one

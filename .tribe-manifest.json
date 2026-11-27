@@ -21,6 +21,7 @@
   "file_work.py",
   "games/golf/replay3d.html",
   "games/pickleball/replay3d.html",
+  "lab/clock.py",
   "lab/golf.py",
   "lab/members.py",
   "lab/paint.py",
