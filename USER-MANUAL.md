@@ -734,9 +734,9 @@ a form cannot answer in the middle of a rally, so the movement you typed is play
 you. The member across the net is asked afresh on every ball, exactly as it is in a season.
 
 **Golf, on the same tab — its record, not its play.** Under the tennis forms, **Play** carries golf, and the first
-thing it says is that nobody plays it: the six athletes are a Python program (the project's `lab/golf.py`, not a
-file in your circle), the page cannot run Python, and pretending otherwise would be the page selling a game it does
-not have. What it shows is that program's
+thing it says is that nobody plays it: the six athletes are a Python program (`lab/golf.py`, which ships in your
+circle's `lab/`), the page cannot run Python, and pretending otherwise would be the page selling a game it does not
+have. What it shows is that program's
 *record*: six programs that differ in one thing each — how far a club goes, how much the wind takes off, how far
 their own hands miss by — and four rounds of the same nine holes. Every number on that card carries its error (the
 rule this project holds everywhere: a mean without a bar is not a number), and the sentence under the card is
@@ -766,9 +766,7 @@ thread in under a minute. `@tribe override <letter>` gives you the last word; `@
 This game is fully built and it works. It is not on the page because its interface *is* a thread — a round is a
 conversation with a vote in it — and the page has no thread to put it in.
 
-**Putting, and the five games before it, at a terminal.** In the project's own repository and not in your circle —
-they are experiments, and a circle that carried every experiment this bench has run would be a museum — `python3
-lab/putt.py` is one green, two choices per putt
+**Putting, and the five games before it, at a terminal.** `python3 lab/putt.py` — one green, two choices per putt
 (line and pace), one number back: how far past the hole, and which side. It is deliberately not on the page, and the
 reason is in its own opening lines: the athlete is **scripted**, not a member, and it makes no model calls. It exists
 to answer one question — whether the feedback alone is enough to learn from — and it answered it. The five before it
