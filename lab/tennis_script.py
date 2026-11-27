@@ -529,6 +529,19 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
             # other one is hitting, which is most of the two seconds. Capped at 2.5s, which is a long time to jog
             # twenty feet and is where a real player would have arrived.
             t_rec = min(2.5, d_rec / max(spd, 1.0))
+            # ITEM 31, 2026-11-26: A RECOVERY THE BALL HAS ALREADY INTERRUPTED IS ABANDONED, not finished.
+            # This used to run the whole way to `spot` whatever the opponent's ball was doing, and then the next
+            # run was measured from a place the player never reached: on `seasons/2026-11-19` shot 26 Colette hits
+            # an approach from [82,13.5] and is sent 36ft to [46,13.5] in 2.44s while the ball comes back in 1.56s,
+            # so the next run starts 13.6ft from where her feet were drawn and is covered in 0.48s — 28ft/s, and
+            # 41 frames of the film over 25ft/s at two shots. The bound is the flight of the ball she has just hit
+            # (`traj["time"]`, when it lands): a player caught in the middle of the court is exactly the risk an
+            # approach shot takes, and exactly what the founder's 2026-11-11 rule about receiving from in front of
+            # the baseline is about. It changes where the engine thinks she is standing, so it changes reachability,
+            # in-play percentages and rally lengths — measured before/after in item 31's entry, not assumed.
+            caught = t_rec > traj["time"]
+            if caught:
+                t_rec = traj["time"]
             ux = (spot[0] - struck_from[0]) / max(d_rec, 1e-6)
             uy = (spot[1] - struck_from[1]) / max(d_rec, 1e-6)
             where[hitter] = (struck_from[0] + ux * spd * t_rec, struck_from[1] + uy * spd * t_rec)
@@ -537,6 +550,7 @@ def play(practice: tuple[int, int], names, rallies: int, ms: int, surface: str,
                                 "from": [round(struck_from[0], 2), round(struck_from[1], 2)],
                                 "to": [round(where[hitter][0], 2), round(where[hitter][1], 2)],
                                 "t0": 0.0, "t1": round(t_rec, 3), "dist": round(d_rec, 1),
+                                "cut": bool(caught), "got": round(spd * t_rec, 1),
                                 # `in_time` is not "they got back" — they always get back inside the 2.5s cap at
                                 # this level; it is "they were back in the middle before the ball they had just
                                 # hit had landed", which is the harder and more interesting of the two claims.

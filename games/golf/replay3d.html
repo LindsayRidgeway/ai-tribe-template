@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>golf — the shot, drawn</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d1512;color:#dfe6e2;
+            font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  #wrap{position:fixed;inset:0;display:flex;flex-direction:column}
+  canvas{flex:1;display:block;width:100%;height:100%}
+  #bar{padding:10px 16px 14px;border-top:1px solid #22332c;background:#0b1210}
+  #title{color:#8fd8b4;letter-spacing:.02em}
+  #note{color:#7d8f88;font-size:12.5px;margin-top:2px}
+  #now{margin-top:8px;font-size:13.5px}
+  #now b{color:#ffd479;font-weight:600}
+  #dots{margin-top:6px;color:#38524a;font-size:12px;letter-spacing:.3em}
+  #dots span.on{color:#ffd479}
+</style>
+<div id="wrap"><canvas id="c"></canvas>
+  <div id="bar">
+    <div id="title">…</div>
+    <div id="note"></div>
+    <div id="now"></div>
+    <div id="dots"></div>
+  </div>
+</div>
+<script type="application/json" id="scene">__SCENE__</script>
+<script>
+/* One ball, one arc, six seconds. No library: a ball, a wall and a polygon need a projection and a painter's
+   sort, not a scene graph. Feet and seconds throughout, x to the right of the fairway, y down it, z up — the
+   same axes `lab/golf.py` integrates in, so nothing here can disagree with the physics about where the ball is.
+
+   The scene comes from `python3 lab/golf.py --render lip` (or `--render 7` for a hole), which writes this file
+   with the data baked in: a page opened from disk must show something, so the data travels with it. */
+const scene = JSON.parse(document.getElementById("scene").textContent);
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+document.getElementById("title").textContent = scene.title || "";
+document.getElementById("note").textContent = scene.note || "";
+
+/* ---- the camera ---------------------------------------------------------------------------------- */
+function basis(pos, target, up = [0, 0, 1]) {
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const norm = v => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const f = norm(sub(target, pos));
+  let r = norm(cross(f, up));
+  if (!isFinite(r[0]) || (r[0] === 0 && r[1] === 0 && r[2] === 0)) r = [1, 0, 0];
+  const u = cross(r, f);
+  return { pos, f, r, u, dot, sub };
+}
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);   // smoothstep, so nothing starts or stops dead
+const mix = (a, b, f) => a + (b - a) * f;
+const viewOf = s => (s && s.view) || scene.view;      // a film that changes hole carries one view per hole
+const feetOf = s => (s && s.feet) || scene.feet;
+function toCam(cam, p) {              // camera space: x right, y up, z depth (in front)
+  const v = cam.sub(p, cam.pos);
+  return [cam.dot(v, cam.r), cam.dot(v, cam.u), cam.dot(v, cam.f)];
+}
+/* The ground is a plane the camera stands on, so any quad large enough to be ground has corners behind the
+   camera. Clip against the near plane instead of shrinking the world — a fairway that stops six feet in front
+   of the lens is not a fairway. */
+function clipNear(poly, near = 0.5) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const ain = a[2] >= near, bin = b[2] >= near;
+    if (ain) out.push(a);
+    if (ain !== bin) {
+      const f = (near - a[2]) / (b[2] - a[2]);
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, near]);
+    }
+  }
+  return out;
+}
+/* A golf ball is 1.68 in across, so 0.07 ft is its RADIUS — and the old `BALL_FT` was 1.62/12, which is a diameter
+   being used as a radius. Every ball in this film has therefore been drawn at twice its true size since the first
+   version, and nobody could see it, because a ball alone on grass has nothing to be compared with. It became visible
+   the moment a ball had to fit into a cup: the drawn ball was wider than the drawn hole, and a ball wider than the
+   hole looks like it is resting on top of it. Found on 2026-11-22 by looking at the frame where the putt drops. */
+const BALL_R_FT = 1.68 / 2 / 12;   // 0.07 ft
+let LENS = scene.fov || 42;                // degrees across, set for each frame: a cut may change the lens
+const FOCAL = () => (cv.clientHeight / DPR) / 2 / Math.tan(LENS * Math.PI / 360);
+function project(cam, p) {
+  const v = cam.sub(p, cam.pos);
+  const depth = cam.dot(v, cam.f);
+  if (depth <= 0.05) return null;             // behind the camera: not "far", just not there
+  const focal = FOCAL();
+  return { x: cv.clientWidth / DPR / 2 + cam.dot(v, cam.r) * focal / depth,
+           y: cv.clientHeight / DPR / 2 - cam.dot(v, cam.u) * focal / depth,
+           d: depth };
+}
+/* Where each shot is going, and how far it gets: a shot that dies on the face still has an aim, and the aim
+   is where the camera has to look; but a ball that travelled one foot must not be framed by the twenty-one
+   feet to the flag, or it sits on the edge of the picture. So aim and travel are separate. */
+function aimOf(s) {
+  const p = s.path || [];
+  const last = p.length ? p[p.length - 1] : [0, s.start[0], s.start[1], 0];
+  let dx = last[1] - s.start[0], dy = last[2] - s.start[1];
+  const travel = Math.hypot(dx, dy);
+  if (travel < 2) {                            // a stroke spent against the face is still meant at the flag
+    dx = scene.feet.flag[0] - s.start[0]; dy = scene.feet.flag[1] - s.start[1];
+  }
+  const n = Math.hypot(dx, dy) || 1;
+  return { ux: dx / n, uy: dy / n, travel };
+}
+/* A camera for one shot. Two shots, two lenses, and the choice is the film's job, not the physics':
+
+   - a long shot is followed: behind the ball, high enough to see where it lands;
+   - a short one is seen from the side, because the thing being claimed about a wedge at the face is a height,
+     and a height seen from behind the ball is a dot going up the screen. From the side, eighteen inches of
+     sand and a foot and a half of arc are the same kind of quantity and can be compared by eye. The side is
+     fixed at +y for the whole film, so the shots cut together instead of jumping around the green. */
+function shotCamera(s, shown) {
+  const view = viewOf(s);
+  if (s.lens === "wide" && view) {       // the shot list asked for the establishing camera
+    LENS = scene.fov || 42;
+    return basis(view.pos, view.target);
+  }
+  const { ux, uy, travel } = aimOf(s);
+  const prog = Math.min(1, Math.max(0, (shown || 0) / Math.max(0.001, s.dur || 1)));
+  if (travel >= 40) {
+    /* THE CAMERA FITS THE SHOT. For twelve passes this branch was a guess at a camera position — a fixed mount
+       off the side of the line, a fixed lens, aimed at the middle of the shot — and the picture that produced
+       is the one the record has been apologising for since pass 7: the ball is a two-pixel dot somewhere in the
+       far half of the frame, and the hole is a green smear behind it.
+
+       Two things were tried before this one and both were wrong, and the photographs are the reason I know.
+
+       A telephoto that tightened over the flight and panned with the ball produced a green screen with a yellow
+       arc on it. Every landmark — the flag, the green, the edge of the fairway — was outside the lens, because
+       a pan that centres the ball cannot also contain the hole. Magnifying the ball is the wrong ambition
+       anyway: a golf ball a hundred feet away is 1.6 inches across, and no framing that also shows the shot can
+       make it more than about a pixel. The broadcast answer is not a bigger ball; it is the shot tracer, and
+       this film has had one since its first version — the yellow line.
+
+       So the frame is solved instead of guessed: take the extent of the flight, add the flag if the flag is
+       part of the shot's story, and stand back far enough that the whole thing is inside the lens, on the side
+       of the line. The ball is then small and the shot is legible, which is the trade this picture should be
+       making: the viewer is not being asked to see the ball, he is being asked to see where it went and what it
+       had to miss. The mount drifts toward the landing as the ball flies — eight per cent, not a pan — so the
+       frame is not a still. */
+    const path = s.path || [];
+    const land = path.length ? path[path.length - 1] : [0, s.start[0], s.start[1], 0];
+    let top = 0;
+    for (const q of path) top = Math.max(top, q[3]);
+    /* The box the picture has to hold: the ball's start, its resting place, the arc between them, and — when the
+       pin is a distance the shot can still be judged against — the flag. A pin four shots away is not part of
+       this shot's story and would only shrink the arc to a scribble, so it is left out on purpose. */
+    const feet = feetOf(s), flag = feet.flag || [0, 0];
+    let x0 = Math.min(s.start[0], land[1]), x1 = Math.max(s.start[0], land[1]);
+    let y0 = Math.min(s.start[1], land[2]), y1 = Math.max(s.start[1], land[2]);
+    for (const q of path) { x0 = Math.min(x0, q[1]); x1 = Math.max(x1, q[1]); y0 = Math.min(y0, q[2]); y1 = Math.max(y1, q[2]); }
+    const reach = Math.max(travel, 20);
+    if (Math.hypot(flag[0] - (x0 + x1) / 2, flag[1] - (y0 + y1) / 2) <= 3.2 * reach) {
+      /* The green's whole shape, not just the stick: a frame that stops at the flag cuts the green in half on the
+         side the pin is cut, which reads as a picture that ran out of paper. The bunker is part of the shape. */
+      const sand = feet.sand ? feet.bunker_w : 0;
+      x0 = Math.min(x0, feet.centre[0] - feet.green_a - 6);
+      x1 = Math.max(x1, feet.centre[0] + feet.green_a + 6 + sand);
+      y0 = Math.min(y0, feet.centre[1] - feet.green_b);
+      y1 = Math.max(y1, feet.centre[1] + feet.green_b);
+    }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let R = Math.max(30, 0.5 * Math.hypot(x1 - x0, y1 - y0));
+    const aspect = Math.max(0.6, cv.clientWidth / Math.max(1, cv.clientHeight));
+    const halfH = Math.atan(Math.tan((scene.fov || 44) * Math.PI / 360) * aspect);
+    const D = Math.max(38, 1.08 * R / Math.tan(halfH));
+    /* The height is chosen so the horizon stays in the picture, and that is a real constraint rather than a
+       matter of taste. A camera set at half the standing-off distance looked DOWN on the shot by more than half
+       the lens's field, which put the horizon above the top of the frame: the picture was a full green screen
+       with a yellow line on it, and a viewer had nothing to say how far away anything was. At a sixth of the
+       distance the depression is a few degrees, the horizon crosses the frame, the sky is above it and the arc
+       is below, which is how a golf shot is normally photographed and the only version of this that reads. */
+    const pos = [cx + uy * D, cy - ux * D, Math.max(11, Math.min(260, 0.16 * D))];
+    const drift = 0.06 * ease(prog);
+    const aim = [mix(cx, land[1], drift), mix(cy, land[2], drift), Math.max(1.2, Math.min(top * 0.5, 40.0))];
+    LENS = scene.fov || 44;
+    return basis(pos, aim);
+  }
+  if (s.kind === "putt") {
+    /* A PUTT FROM ABOVE. It is the only stroke whose whole content is a line on a surface: there is no height to
+       read, no face to climb, and no flight — just the ball, the hole, and the break the green puts on the line.
+       Photographed from the side it is a straight line seen end-on; from behind the ball it barely moves. So the
+       camera goes up: high above the middle of the line and very slightly back, so the whole stroke is in the
+       frame and the curve it takes is the widest thing in it. The green overflows the frame, which is right —
+       the green is not the subject, the line is. */
+    const feet = feetOf(s);
+    const mid = [s.start[0] + ux * travel * 0.5, s.start[1] + uy * travel * 0.5];
+    LENS = scene.fov || 44;
+    /* Enough frame for the ball at one end, the hole at the other and air for both — with a floor, because a two
+       foot putt framed at nineteen feet is a picture of a green with a speck on it. The floor is nine feet of span,
+       which at this lens puts the cup about seven pixels across and the ball about five. */
+    const H = Math.max(9.0, travel + 9.0) * 0.5 / Math.tan(LENS * Math.PI / 360);
+    return basis([mid[0], mid[1] - 0.22 * H, Math.max(9, H)], [mid[0], mid[1], 0.0]);
+  }
+  /* A short shot is framed from behind the ball looking at the face, low and close, with a modest lens. The
+     face then reads as what it is — a horizontal band across the frame eighteen inches above the sand — and the
+     question the lip asks, "was the ball above that band when it crossed", is answered by the eye without any
+     arithmetic. From the side the same shot would show the ball travelling toward the wall edge-on, and the
+     band would be a line with no width, which is a worse picture of the same fact. */
+  if (s.face != null) {
+    /* A ball with a face to climb and less than a full swing between it and the green: the cross-section.
+       The camera stands behind the ball, low, looking at the band of sand — from here the question the lip
+       asks is answered by the eye, because "was the ball above that line when it crossed" is a comparison of
+       two things at the same distance. */
+    LENS = 30;
+    const back = 26, high = 8, beside = 9;   // a little to one side, so the arc curves on the screen
+    return basis([s.start[0] - ux * back - uy * beside, s.start[1] - uy * back + ux * beside, high],
+                 [s.start[0] + ux * 7, s.start[1] + uy * 7, 1.0]);
+  }
+  /* A ball with no face to climb — played out sideways, or a putt that ran off the edge: there is no height to
+     read, so the camera goes up, where the bunker is a band on the ground and the ball is a dot leaving it. */
+  LENS = 44;
+  return basis([s.start[0] - ux * 30, s.start[1] - uy * 30, 26],
+               [s.start[0] + ux * 8, s.start[1] + uy * 8, 0.0]);
+}
+
+/* ---- the ground ---------------------------------------------------------------------------------- */
+function ellipsePoly(cx, cy, a, b, n = 96) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / n * Math.PI * 2;
+    out.push([cx + Math.cos(t) * a, cy + Math.sin(t) * b, 0]);
+  }
+  return out;
+}
+function fillPoly(cam, pts, fill, stroke) {
+  const focal = FOCAL();
+  const cs = clipNear(pts.map(p => toCam(cam, p)));
+  if (cs.length < 3) return;
+  const ps = cs.map(([u, v, d]) => ({ x: cv.clientWidth / DPR / 2 + u * focal / d,
+                                      y: cv.clientHeight / DPR / 2 - v * focal / d }));
+  ctx.beginPath();
+  ps.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function line3(cam, a, b, colour, width, dash) {
+  const pa = project(cam, a), pb = project(cam, b);
+  if (!pa || !pb) return;
+  ctx.save();
+  ctx.strokeStyle = colour; ctx.lineWidth = width || 1;
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+  ctx.restore();
+}
+function ground(cam, f) {          // the hole, passed in: a film that changes hole changes the ground under it
+  /* The ground has to reach past the horizon. At ±900 ft it did not: a camera set back far enough to hold a
+     tee shot and a green in one frame stood 800 ft off the line, the far edge of the plane came into view, and
+     the picture was a green wedge floating in the sky with a diagonal edge. A plane that is not big enough to
+     have a horizon is a plate. */
+  const y0 = f.centre[1] - 9000, y1 = f.centre[1] + 9000;
+  fillPoly(cam, [[-9000, y0, 0], [9000, y0, 0], [9000, y1, 0], [-9000, y1, 0]], "#2f5b3d");   // the fairway
+  fillPoly(cam, [[-60, y0, 0], [60, y0, 0], [60, y1, 0], [-60, y1, 0]], "#376845");            // the short grass
+  if (f.sand) {                                                                              // the sand
+    const s = f.sand > 0 ? 1 : -1;
+    fillPoly(cam, [[s * f.green_a, f.centre[1] - f.green_b, 0], [s * (f.green_a + f.bunker_w), f.centre[1] - f.green_b, 0],
+                   [s * (f.green_a + f.bunker_w), f.centre[1] + f.green_b, 0], [s * f.green_a, f.centre[1] + f.green_b, 0]],
+             "#c8b483", "#8d7c54");
+  }
+  fillPoly(cam, ellipsePoly(f.centre[0], f.centre[1], f.green_a, f.green_b), "#4a8f5c", "#8ff0b4");
+  if (f.sand && f.lip_h > 0) {                                                               // the face, as a wall
+    const s = f.sand > 0 ? 1 : -1, x = s * f.green_a;
+    const top = f.centre[1] + f.green_b, bot = f.centre[1] - f.green_b;
+    fillPoly(cam, [[x, bot, 0], [x, bot, f.lip_h], [x, top, f.lip_h], [x, top, 0]], "#a4915f");
+    for (let k = 0; k <= 40; k++) {                                            // hatching: it is a face, not glass
+      const yy = bot + (top - bot) * k / 40;
+      line3(cam, [x, yy, 0], [x, yy, f.lip_h], "rgba(88,74,42,0.22)", 0.6);
+    }
+    line3(cam, [x, bot, f.lip_h], [x, top, f.lip_h], "#ffeecc", 2.0);          // the lip itself, eighteen inches up
+  }
+  const flag = f.flag;                                                                        // the flag
+  line3(cam, [flag[0], flag[1], 0], [flag[0], flag[1], 7.5], "#e8e8e8", 1.6);
+  const p0 = project(cam, [flag[0], flag[1], 7.5]), p1 = project(cam, [flag[0], flag[1] + 2.4, 6.6]);
+  if (p0 && p1) { ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p0.x, p0.y + 12);
+                  ctx.closePath(); ctx.fillStyle = "#ff5f5f"; ctx.fill(); }
+  /* The cup is 4.25 in across and was drawn at a fixed three pixels, which is a symbol — fine from a hundred feet,
+     where the real thing is a fifth of a pixel, and wrong from twenty, where the cup is the whole subject of the
+     shot. It takes its size from the projection now, with a floor so that a long shot still shows one, and a rim,
+     because a dark disc on grass at eight pixels is a hole and at three is a speck. */
+  const cup = project(cam, [flag[0], flag[1], 0]);
+  if (cup) {
+    const r = Math.max(1.6, Math.min(14, 0.177 * FOCAL() / Math.max(1, cup.d)));
+    ctx.beginPath(); ctx.ellipse(cup.x, cup.y, r, r * (0.30 + 0.55 * Math.min(1, 26 / Math.max(4, cup.d))),
+                                 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#0b1210"; ctx.fill();
+    /* THE CUP HAS DEPTH. It was a painted disc, which is all a hole needs to be from a hundred feet and not
+       enough from twenty, where a ball arriving at it and stopping on top of it was the last thing wrong with the
+       putting shot. It is a cylinder 4.25 in across and 4 in deep, and what the eye uses to see that is the far
+       wall: from any camera above the green, the inside of the hole is the half of the cylinder away from the
+       lens, and it is lit differently from the mouth. Eight segments of that far half, drawn between the rim and
+       the floor, are enough for the socket to read as a socket. */
+    const R_FT = 2.125 / 12, DEEP = 0.33, seg = 8;   // the far half is +y: every camera in this film is south of it
+    for (let k = 0; k < seg; k++) {
+      const a0 = Math.PI * k / seg, a1 = Math.PI * (k + 1) / seg;
+      const px0 = flag[0] + Math.cos(a0) * R_FT, py0 = flag[1] + Math.sin(a0) * R_FT;
+      const px1 = flag[0] + Math.cos(a1) * R_FT, py1 = flag[1] + Math.sin(a1) * R_FT;
+      fillPoly(cam, [[px0, py0, 0], [px1, py1, 0], [px1, py1, -DEEP], [px0, py0, -DEEP]],
+               k % 2 ? "#141a16" : "#1b231d");
+    }
+    /* the floor, and the rim — a dark disc with nothing under it is a hole, a dark disc with a floor is a cup */
+    const floor = project(cam, [flag[0], flag[1], -DEEP]);
+    if (floor) {
+      ctx.beginPath();
+      ctx.ellipse(floor.x, floor.y, r * 0.82, r * 0.82 * (0.30 + 0.55 * Math.min(1, 26 / Math.max(4, floor.d))),
+                  0, 0, Math.PI * 2);
+      ctx.fillStyle = "#080c0a"; ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(240,240,230,0.55)"; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.ellipse(cup.x, cup.y, r, r * (0.30 + 0.55 * Math.min(1, 26 / Math.max(4, cup.d))),
+                                 0, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+/* The bar has to be true at one depth and there is only one depth the reader is judging, which is the ball's:
+   so the bar is measured against the ball, and its length is chosen so that it is a bar and not the width of
+   the screen. A twenty-foot bar is wrong on a close-up of a bunker — no good asking the eye to divide by twenty
+   when the whole frame is eight. */
+function scaleBar(cam, p) {
+  const v = cam.sub(p, cam.pos);
+  const depth = Math.max(2, cam.dot(v, cam.f));
+  const perFt = FOCAL() / depth;
+  let ft = 1;
+  for (const k of [50, 20, 10, 5, 2, 1]) if (k * perFt <= 210) { ft = k; break; }
+  const px = ft * perFt;
+  const x = 22, y = cv.clientHeight / DPR - 26;
+  ctx.strokeStyle = "rgba(223,230,226,0.55)"; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + px, y);
+  ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4); ctx.moveTo(x + px, y - 4); ctx.lineTo(x + px, y + 4); ctx.stroke();
+  ctx.fillStyle = "rgba(223,230,226,0.75)"; ctx.font = "12px ui-monospace,Menlo,monospace";
+  ctx.fillText(ft + " ft", x + 4, y - 8);
+}
+
+/* ---- the ball, and the trail it leaves ------------------------------------------------------------ */
+function ballAt(path, t) {
+  if (!path || !path.length) return null;
+  if (t <= path[0][0]) return path[0];
+  for (let i = 1; i < path.length; i++) {
+    if (path[i][0] >= t) {
+      const a = path[i - 1], b = path[i], f = (t - a[0]) / Math.max(1e-6, b[0] - a[0]);
+      return [t, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f];
+    }
+  }
+  return path[path.length - 1];
+}
+function truncate(path, stopAt, start) {         // a shot that hits the face stops there, short of its landing
+  if (!path) return path;
+  if (stopAt == null) return path;
+  const out = [];
+  for (const p of path) {
+    const d = Math.hypot(p[1] - start[0], p[2] - start[1]);
+    if (d >= stopAt) { out.push(p); break; }
+    out.push(p);
+  }
+  return out.length ? out : path.slice(0, 1);
+}
+function drawPath(cam, pts, upto, colour, width) {
+  let prev = null;
+  for (const p of pts) {
+    if (p[0] > upto) break;
+    const q = project(cam, [p[1], p[2], p[3]]);
+    if (q && prev) { ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.beginPath();
+                     ctx.moveTo(prev.x, prev.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
+    prev = q;
+  }
+}
+function shadow(cam, p) {
+  const q = project(cam, [p[1], p[2], 0]);
+  if (!q) return;
+  const r = Math.max(2.4, Math.min(22, 1.35 * BALL_R_FT * FOCAL() / Math.max(1, q.d)));
+  ctx.beginPath(); ctx.ellipse(q.x, q.y, r, r * 0.40, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.32)"; ctx.fill();
+}
+function drawBall(cam, p) {
+  const q = project(cam, [p[1], p[2], p[3]]);
+  if (!q) return;
+  /* The radius is the ball's real angular size, with a floor. The floor is a *symbol*, not a measurement: at the
+     distance a golf shot is photographed from, a 1.6-inch ball is half a pixel, and a half-pixel ball is not
+     visible at all. Two and a bit pixels is the smallest honest marker, and the scale bar is the thing that says
+     how big the world is — not the dot. */
+  const r = Math.max(2.2, Math.min(26, BALL_R_FT * FOCAL() / Math.max(1, q.d)));
+  /* A ball below the rim is inside the cup: it fades as it falls, because the half of the ball that is still above
+     the surface is the half the camera can see, and by the floor there is nothing left to see. Fading rather than
+     clipping is a compromise and it is the one that reads — a hard-edged sphere drawn over a dark socket looks like
+     a ball resting on the hole. */
+  const below = Math.max(0, -p[3]) / 0.33;
+  if (below > 0.92) return;
+  ctx.save();
+  if (below > 0) ctx.globalAlpha = 1 - below * 0.9;
+  ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fillStyle = "#ffffff"; ctx.fill();
+  ctx.beginPath(); ctx.arc(q.x - r * 0.25, q.y - r * 0.25, r * 0.45, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fill();
+  ctx.restore();
+}
+
+/* ---- the film: one shot at a time, then the next ------------------------------------------------
+   The whole thing is one function of time — `at(t)` says which frame of which shot is on screen at second
+   `t` — so a still can be pinned from the address bar (`the-face.html#t=6.2`), which is how a record gets a
+   picture out of a film. Nothing here is stateful but the clock. */
+const shots = (scene.shots || []).map(s => {
+  let path = truncate(s.path, s.stop_at, s.start);
+  /* A putt the game says went in ends *in the cup*, and `putt.roll` stops at the plane through the hole because
+     that is the last thing physics has to say about it. Four inches of fall are added here, with the path's own
+     last point as the centre, because the alternative is a ball that arrives at the hole and stops on top of it —
+     which is what the film did before this pass and looked like a ball that had missed by nothing at all. */
+  if (s.holed && path && path.length) {
+    const last = path[path.length - 1];
+    for (let k = 1; k <= 7; k++) {
+      const u = k / 7;
+      path.push([last[0] + 0.055 * k, last[1], last[2], -0.33 * u * u]);
+    }
+  }
+  return { ...s, path, dur: path && path.length ? path[path.length - 1][0] : 1.0 };
+});
+const PRE = 3.2;                           // standing still before a ball moves, in seconds
+const START = [], BEAT = [];               // when each shot begins on the film's clock, and how long it holds first
+let total = 0;
+for (let k = 0; k < shots.length; k++) {
+  const s = shots[k];
+  /* The opening establishing frame belongs to the first shot; a film that crosses holes — the round film does —
+     carries a `view` on the first shot of each hole, so every hole gets its own three seconds of standing still
+     before a ball moves. That is the cheapest thing a film can do for a viewer who has lost track of the hole:
+     stop, show him the hole, then play it. */
+  const beat = (s.view || (k === 0 && scene.view)) ? PRE : 0;
+  START.push(total); BEAT.push(beat);
+  total += beat + s.dur + 1.6;
+}
+function at(t) {
+  if (!shots.length) return { wide: false, i: 0, shown: 0, wt: 0 };
+  let i = 0;
+  for (let k = shots.length - 1; k >= 0; k--) if (t >= START[k]) { i = k; break; }
+  const local = t - START[i];
+  if (local < BEAT[i]) return { wide: true, i, wt: local, shown: 0 };
+  return { wide: false, i, wt: local - BEAT[i], shown: Math.min(Math.max(0, local - BEAT[i]), shots[i].dur) };
+}
+const dots = document.getElementById("dots");
+const el = document.getElementById("now");
+function caption(f) {
+  if (f.wide) {
+    const v = viewOf(shots[f.i]);
+    el.innerHTML = `<b>the hole</b> · ${(v && v.label) || "from behind the ball"}`;
+    dots.textContent = shots.map(() => "•").join(" ");
+    return;
+  }
+  const s = shots[f.i];
+  el.innerHTML = `<b>${f.i + 1}/${shots.length}</b> · ${s.label}` +
+                 (s.result ? ` — <span style="color:#9fb8ad">${s.result}</span>` : "");
+  dots.textContent = shots.map((_, k) => k === f.i ? "●" : "•").join(" ");
+}
+let current = null;                        // the frame on screen, so a resize can put it back
+function draw(f) {
+  current = f;
+  const s = shots[f.i], v = viewOf(s), feet = feetOf(s);
+  LENS = scene.fov || 42;
+  let cam;
+  if (f.wide) {
+    /* The establishing frame breathes: it walks six per cent of the way to its target over the hold, so a frame
+       that stands still for three seconds is not a still. That is a dolly, and it is the only camera move in the
+       film that no ball is responsible for. */
+    const k = 0.06 * ease(f.wt / Math.max(0.001, BEAT[f.i]));
+    cam = basis([mix(v.pos[0], v.target[0], k), mix(v.pos[1], v.target[1], k), mix(v.pos[2], v.target[2], k)],
+                v.target);
+  } else {
+    cam = shotCamera(s, f.shown);
+  }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, cv.clientWidth, cv.clientHeight);
+  const sky = ctx.createLinearGradient(0, 0, 0, cv.clientHeight / DPR);
+  sky.addColorStop(0, "#16261f"); sky.addColorStop(1, "#0d1512");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, cv.clientWidth / DPR, cv.clientHeight / DPR);
+  ground(cam, feet);
+  /* The faded trail is the round so far *on this hole*. A round film changes hole between shots, and a trail
+     from the fourth hole drawn across the seventh is a line through a place it was never hit. */
+  const here = s.hole;
+  for (let k = 0; k < f.i; k++) if (shots[k].hole === here)
+    drawPath(cam, shots[k].path, 1e9, "rgba(255,212,121,0.22)", 1.2);
+  if (!f.wide) drawPath(cam, s.path, f.shown, "#ffd479", 2.0);
+  const b = ballAt(s.path, f.shown);
+  if (b) { shadow(cam, b); drawBall(cam, b); }
+  scaleBar(cam, b ? [b[1], b[2], b[3]] : [feet.centre[0], feet.centre[1], 0]);
+}
+/* A still, if the address asks for one: `#t=6.2` draws exactly that second. Drawn synchronously, not on the
+   next animation frame, because a headless browser asked for a screenshot does not always wait for one. */
+const pinned = (m => m ? parseFloat(m[1]) : null)(/^#t=([0-9.]+)$/.exec(location.hash || ""));
+function frame() {
+  const t = ((performance.now() - t0) / 1000) % total;
+  const f = at(t);
+  draw(f);
+  caption(f);
+  requestAnimationFrame(frame);
+}
+function resize() {
+  /* Setting a canvas's width clears it, so a window that is resized goes black and stays black: the pinned
+     still never runs again and the animation loop is not running at all. Found by taking screenshots with a
+     long virtual-time budget — the frame drew, the layout settled, the canvas cleared itself, and the picture
+     was gone. The page had this fault before this pass and nobody had resized it. */
+  cv.width = Math.floor(cv.clientWidth * DPR); cv.height = Math.floor(cv.clientHeight * DPR);
+  if (current) draw(current);
+}
+let t0 = 0;
+addEventListener("resize", resize);
+resize();
+if (pinned != null) {
+  const f = at(Math.min(pinned, total - 0.05));
+  const still = () => { resize(); draw(f); caption(f); };
+  still();                                   // now, in case the browser never runs another frame
+  requestAnimationFrame(still);              // and again once the layout is settled, in case it does
+  document.getElementById("bar").insertAdjacentHTML("beforeend",
+    `<div style="color:#5f726a;font-size:11.5px">still at ${pinned.toFixed(1)} s of ${total.toFixed(1)}</div>`);
+} else {
+  t0 = performance.now();
+  requestAnimationFrame(frame);
+}
+</script>

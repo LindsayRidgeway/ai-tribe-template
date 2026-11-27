@@ -1545,8 +1545,21 @@ def play_point(server: Player, receiver: Player, surface: str, wind_vec, wind_in
             lines.append(f"{receiver.name} loses the point.")
             server.winners += 1
             return lines
-        # Where the feet are next time: back behind the baseline, or in behind an approach shot.
-        where[receiver.name] = recovery_spot(receiver, shot["contact"], plan["kind"] == "approach")
+        # Where the feet are next time: back behind the baseline, or in behind an approach shot — as far as she
+        # gets before the ball she has just hit comes back (item 31, 2026-11-26). Charging the whole recovery
+        # whatever the opponent's ball is doing put the next shot's run at 28ft/s and let a receiver stand in a
+        # place she could not have reached; a player caught in the middle of the court is the risk an approach
+        # takes. The film has done this since the same change in `lab/tennis_script.py`, and the two must agree
+        # about where the feet are or the season's numbers and the picture are two different matches.
+        spot = recovery_spot(receiver, shot["contact"], plan["kind"] == "approach")
+        c0, c1 = shot["contact"][0], shot["contact"][1]
+        d = math.hypot(spot[0] - c0, spot[1] - c1)
+        if d > 1e-6:
+            got = min(min(2.5, d / max(movement_speed(receiver), 1.0)), t["time"])
+            f = min(1.0, got * max(movement_speed(receiver), 1.0) / d)
+            where[receiver.name] = (c0 + (spot[0] - c0) * f, c1 + (spot[1] - c1) * f)
+        else:
+            where[receiver.name] = spot
         incoming = t["bounce"]
         incoming["speed_in"] = t["bounce"]["speed_out"] / MPH
         server, receiver = receiver, server
@@ -2215,7 +2228,6 @@ def run_watch(args) -> int:
     d, _ = season_paths(args.season, args.season_dir)
     target = d / "watch.json"
     d.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(data, indent=1), encoding="utf-8")
 
     # The session the film just played, written by the season's one writer. `results` is the film's own `in`
     # flag per shot and `lengths` its own rally lengths, so there is no second count that could disagree.
@@ -2227,6 +2239,14 @@ def run_watch(args) -> int:
                    lengths=lengths, competition=(args.mode == "compete"), by=args.by,
                    partners={a: [b] for a, b in ((names[0], names[1]), (names[1], names[0]))})
     f = save_season(book, args.season, args.season_dir)
+    # ITEM 23, 2026-11-26: THE FILM SAYS WHICH SESSION IT IS, AND IT IS WRITTEN AFTER THE SESSION IS IN THE BOOK SO
+    # THAT IT CAN. `watch.json` is the last session somebody WATCHED, not the last one that was PLAYED — the clock
+    # may play five overnight and leave the page showing the one from before them. The frontier is the most
+    # sessions any member of the season has played, which is the number the page can recompute from the book beside
+    # the film; `of` is the plan's length, and 0 when the season has no plan.
+    data["session"] = {"n": max(sessions_played(book).values(), default=0),
+                       "of": (plan_of(book) or {}).get("sessions") or 0}
+    target.write_text(json.dumps(data, indent=1), encoding="utf-8")
     try:
         shown = f.relative_to(ROOT)
     except ValueError:
@@ -2598,6 +2618,133 @@ def seasons_on_disk(base: Path | str | None = None, sport: str = "tennis") -> li
     return found
 
 
+def character_pool(base_dir: Path | str) -> dict[str, dict]:
+    """The characters this colony may cast, from `cast.json` beside its seasons directory.
+
+    Empty is a real answer. A colony with no cast file has no pool, and a clock with no pool copies the last
+    season's setup as it always did rather than inventing people — this rule stops a WRONG cast, and a colony
+    that has never invented a character has no wrong cast to stop.
+
+    A character carries its own `sex` and its own `look`, and that is the whole point of moving them here from a
+    season's `setup.json`: a group and a body are the game's invention for a character, and the clock can compose a
+    season from them without copying a participant's row forward along with them."""
+    f = Path(base_dir).parent / "cast.json"
+    if not f.exists():
+        return {}
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for name, v in (data.get("players") or {}).items():
+        if not v.get("character"):
+            continue
+        sex = str(v.get("sex") or "").strip().lower()
+        if not sex:
+            # A character with no group cannot be placed in a competition, so it is not castable. Skipping it here
+            # rather than defaulting is the same rule `may_compete` applies to a person.
+            continue
+        out[name] = {"sex": sex, "look": dict(v.get("look") or {}), "face": str(v.get("face") or "")}
+    return out
+
+
+def cast_per_group(base_dir: Path | str, default: int = 3) -> int:
+    """How many the colony wants in each group — three and three, per the founder's cast instruction of 2026-11-19."""
+    f = Path(base_dir).parent / "cast.json"
+    try:
+        return int(json.loads(f.read_text(encoding="utf-8")).get("per_group") or default)
+    except (OSError, ValueError, TypeError):
+        return default
+
+
+def declarations(base_dir: Path | str) -> dict[str, str]:
+    """Participants who have DECLARED a group, from `declarations.json` beside the seasons directory.
+
+    The founder's rule as CAST.md states it: a participant's group is the participant's to declare and nobody
+    else's to write down. This file is where a declaration goes; empty means nobody has made one, which is a
+    record of what has been declared rather than of what has been assumed."""
+    f = Path(base_dir).parent / "declarations.json"
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(n): str(s).strip().lower() for n, s in (data.get("declared") or {}).items() if s}
+
+
+def next_cast(base_dir: Path | str, src_setup: Path | str,
+              src_members: dict[str, int]) -> tuple[list[dict] | None, dict[str, int], str]:
+    """Who next season's court may hold, and how many sessions each of them is due.
+
+    The founder, 2026-11-20: *"Why have you requested drawings of these imaginary individuals? Are you suggesting
+    that every user will see tennis games played by those four individuals rather than by members of the circle?"*
+    — and the answer to the second half is the rule this function enforces. **A court is a game's cast, and a cast
+    is made of characters.** A participant stands on it only by declaring a group in `declarations.json`, which is
+    a thing only they can do.
+
+    Until 2026-11-26 the clock copied the last season's `setup.json` verbatim, so `"sex": "female"` for Gwen and
+    `"male"` for Dmitri travelled into every season it opened — a group asserted for two participants by a data
+    file, and a same-sex competition entered on the strength of it. So the clock now BUILDS the cast: whoever the
+    last setup names and this colony may cast (a character, or a participant who has declared), topped up per group
+    from the characters in `cast.json`. A group that cannot be filled to the same size as the others is a REFUSAL
+    with a sentence — a stop, not a season played two and two.
+
+    The rungs of the stagger are the last season's own ladder, handed out in alphabetical order within a group,
+    because the spread is what makes "one of each group best, one worst" measurable and WHICH name gets which rung
+    is not something I get to decide by taste.
+
+    Returns (players, members, why). `players` is None when the colony has no `cast.json`."""
+    pool = character_pool(base_dir)
+    if not pool:
+        return None, {}, f"no cast.json beside {Path(base_dir).name}, so the last setup is copied as it always was"
+    try:
+        src_data = json.loads(Path(src_setup).read_text(encoding="utf-8"))
+        src_players = src_data["players"]
+    except (OSError, ValueError, KeyError) as e:
+        return [], {}, f"{Path(src_setup).name} cannot be read ({e}), so there is no cast to build one from"
+    declared = declarations(base_dir)
+    keep, dropped = [], []
+    for p in src_players:
+        n = p.get("name")
+        if not n:
+            continue
+        if n in pool:
+            keep.append({**p, "sex": pool[n]["sex"]})
+        elif n in declared:
+            keep.append({**p, "sex": declared[n]})          # the declared group, not the file's
+        else:
+            dropped.append(n)
+    want = cast_per_group(base_dir)
+    groups: dict[str, list[dict]] = {}
+    for p in keep:
+        groups.setdefault(p["sex"], []).append(p)
+    for sex in ("female", "male"):
+        have = groups.setdefault(sex, [])
+        on_court = {p["name"] for p in keep}
+        spare = sorted(n for n, v in pool.items() if v["sex"] == sex and n not in on_court)
+        while len(have) < want and spare:
+            n = spare.pop(0)
+            have.append({"name": n, "sex": sex, "history": 0, "look": dict(pool[n]["look"])})
+    short = {s: len(v) for s, v in sorted(groups.items()) if len(v) < want}
+    if short:
+        return [], {}, (f"the last season's court comes to "
+                        f"{', '.join(f'{len(v)} {s}' for s, v in sorted(groups.items()))} and this colony wants "
+                        f"{want} in each group, so there is no competition to be had; add a character to cast.json "
+                        f"(it needs a sex and a look, and a body in games/tennis/bodies) or close this season by hand")
+    players = [p for sex in sorted(groups) for p in groups[sex]]
+    sex_of = {p.get("name"): str(p.get("sex") or "").strip().lower() for p in src_players}
+    members = {}
+    for sex in sorted(groups):
+        rungs = sorted((int(src_members.get(n, 0)) for n, s in sex_of.items() if s == sex), reverse=True)
+        names = sorted(p["name"] for p in groups[sex])
+        if len(rungs) != len(names):
+            return [], {}, (f"the last season's ladder has {len(rungs)} rungs in the {sex} group and this season "
+                            f"has {len(names)} players, and a stagger that cannot be handed out is not one")
+        members.update(dict(zip(names, rungs)))
+    why = (f"{' and '.join(f'{len(v)} {s}' for s, v in sorted(groups.items()))} on court"
+           + (f"; {', '.join(dropped)} left off, because a participant is not cast by a file" if dropped else ""))
+    return players, members, why
+
+
 def clock_season(base: Path | str | None = None, when: str | None = None,
                  sport: str = "tennis") -> tuple[str, str]:
     """Which season an unattended clock plays in, opening the next one if every season has closed.
@@ -2637,6 +2784,14 @@ def clock_season(base: Path | str | None = None, when: str | None = None,
         return "", (f"{src_name} has a plan but no setup.json, so the clock cannot build the same cast again; "
                     f"a competition that cannot be placed in a group is not one")
     plan = plan_of(src)
+    # WHO MAY STAND ON IT. The cast is built rather than copied when this colony has a `cast.json` (2026-11-26),
+    # because the copy carried a participant's asserted group forward for ever. No pool means no rule to apply:
+    # a colony that has never invented a character is not one this rule should stop.
+    players, members, cast_why = next_cast(base_dir, src_setup, plan["members"])
+    if players is not None and not players:
+        return "", f"{src_name} has closed but the next season cannot be cast: {cast_why}"
+    if players is None:
+        members = dict(plan["members"])
     stamp = when or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     name = stamp[:10]
     taken = {n for n, _ in found}
@@ -2646,20 +2801,38 @@ def clock_season(base: Path | str | None = None, when: str | None = None,
     book = {
         "season": name,
         "opened": stamp,
-        "note": (f"opened by the clock from {src_name}: the same cast and the same plan, and every member "
-                 f"starting with {SEASON_START_BALLS} balls of history rather than where the last season left "
-                 f"them, because a season that began where the last one ended would be decided before it was "
-                 f"played"),
+        "note": (f"opened by the clock from {src_name}: "
+                 + ("the same cast and the same plan" if players is None else
+                    f"the cast built from cast.json ({cast_why}) and the same stagger")
+                 + f", and every member starting with {SEASON_START_BALLS} balls of history rather than where the "
+                   f"last season left them, because a season that began where the last one ended would be decided "
+                   f"before it was played"),
         "plan": {"sessions": plan["sessions"], "rallies": plan["rallies"],
-                 "members": dict(plan["members"]), "by": f"the clock, from {src_name}"},
+                 "members": members, "by": f"the clock, from {src_name}"},
         "members": {},
     }
-    for n, k in seed_practice(book, {m: SEASON_START_BALLS for m in plan["members"]}, stamp,
+    for n, k in seed_practice(book, {m: SEASON_START_BALLS for m in members}, stamp,
                               by="the clock, opening the season"):
         print(f"  {n}: starts this season with {k} balls — recorded as carried, not as hit here")
     save_season(book, name, str(base_dir / name), sport)
-    shutil.copyfile(src_setup, base_dir / name / "setup.json")
-    return name, f"every season had closed, so the clock opened {name} from {src_name}'s cast and plan"
+    if players is None:
+        shutil.copyfile(src_setup, base_dir / name / "setup.json")
+    else:
+        # Written, not copied: the players above are the ones this colony may cast, and each one's row comes from
+        # its own entry in `cast.json` rather than from a season a participant played in. The surface and the
+        # rally count are the last season's, because those are properties of the court and not of a person.
+        try:
+            court = json.loads(src_setup.read_text(encoding="utf-8")).get("session") or {}
+        except (OSError, ValueError):
+            court = {}
+        setup_out = {"schema": "ait-tennis-setup/1", "written": stamp,
+                     "written_by": f"the clock, opening {name} — {cast_why}",
+                     "players": players, "session": court}
+        (base_dir / name).mkdir(parents=True, exist_ok=True)
+        (base_dir / name / "setup.json").write_text(json.dumps(setup_out, indent=1) + "\n", encoding="utf-8")
+    return name, (f"every season had closed, so the clock opened {name} from {src_name}'s plan — {cast_why}"
+                  if players is not None else
+                  f"every season had closed, so the clock opened {name} from {src_name}'s cast and plan")
 
 
 def run_schedule(args) -> int:

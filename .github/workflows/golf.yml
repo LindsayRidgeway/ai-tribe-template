@@ -1,0 +1,114 @@
+name: golf
+
+# Play a golf season in this circle, from the Play tab, and keep it in the record.
+#
+# Golf has no member on the course and asks no model anything: the six athletes are policies in `lab/golf.py`, and
+# the game's subject is a program's own uncertainty about its clubs. So this workflow is the cheap one — no key, no
+# network beyond the checkout, nothing that can fail for an interesting reason. What it exists for is the thing a
+# sealed record could not do: a circle pressing Play and getting *its own* nine holes, drawn from its own seed, with
+# the card and the replays written into `games/golf/renders/` where the Play tab reads them.
+#
+# Why a workflow at all: the engine is Python and the app is a browser with no server behind it. Tennis has the same
+# shape for the same reason (`season.yml`), and this copies it deliberately — one pattern, not two.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "how many rounds of nine holes (2 is the fewest that has a before and an after)"
+        required: true
+        default: "4"
+      bags:
+        description: "how many times each athlete is trained afresh — this is what the error bars are the spread of"
+        required: true
+        default: "4"
+      seed:
+        description: "what the weather and the practice are drawn from; leave blank for a new season each press"
+        required: false
+        default: ""
+      calm:
+        description: "still air, or wind drawn every round"
+        type: choice
+        options:
+          - wind
+          - calm
+        default: "wind"
+
+permissions:
+  contents: write
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    # Measured on a laptop: 31 s for the season at four rounds and four bags, and the six pages add a couple of
+    # minutes. The timeout is generous because a runner is slower than this machine, not because the work is big.
+    timeout-minutes: 30
+    concurrency:
+      group: golf
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work from the branch as it is now
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-main}"
+          git fetch --depth=1 origin "$ref"
+          git reset --hard "origin/$ref"
+
+      - name: Play a season
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+          BAGS: ${{ inputs.bags }}
+          SEED: ${{ inputs.seed }}
+          CALM: ${{ inputs.calm }}
+        run: |
+          set -euo pipefail
+          # A blank seed is a new season; the play tab says so, and this is where it becomes true. `date +%s` and
+          # not `$RANDOM`, because a bare number from the shell is not reproducible enough to put in a commit
+          # message — the seed is written down below so a season can be played again exactly.
+          seed="${SEED:-$(date +%s)}"
+          echo "SEED=$seed" >> "$GITHUB_ENV"
+          args=(--season --rounds "$ROUNDS" --bags "$BAGS" --seed "$seed")
+          [ "$CALM" = "calm" ] && args+=(--calm)
+          # The gate and the door, then the six pages. `--start` reads `season.json` rather than recomputing it, and
+          # `--render best|worst` read the card — so the order is not cosmetic.
+          python3 lab/golf.py "${args[@]}" | tee /tmp/season.txt
+          python3 lab/golf.py --start | tee -a /tmp/season.txt
+          for scene in 7 round best worst lip; do
+            python3 lab/golf.py --render "$scene" | tee -a /tmp/season.txt
+          done
+
+      - name: What the season says
+        if: always()
+        env:
+          # An input is not a shell variable: the summary step has to be told what the run was, or the numbers in
+          # it are empty strings and the summary says "seed unknown, ? rounds". (`$SEED` is not here because the
+          # step above hands it on through `$GITHUB_ENV`.)
+          ROUNDS: ${{ inputs.rounds }}
+          BAGS: ${{ inputs.bags }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## golf — this circle's season"
+            echo
+            echo "seed \`${SEED:-unknown}\`, ${ROUNDS:-?} rounds, ${BAGS:-?} practice sessions each."
+            echo
+            echo '```'
+            tail -60 /tmp/season.txt 2>/dev/null || echo "(nothing was played)"
+            echo '```'
+            echo
+            echo "Open the **Play** tab to read the card and watch the replays."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the season in the record
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "Kythe"
+          git config user.email "tribe@users.noreply.github.com"
+          git add -A games/golf/renders
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "golf: a season here — seed ${SEED:-?}, ${{ inputs.rounds }} rounds, ${{ inputs.bags }} bags"
+          git pull -q --rebase || true
+          git push -q || { git pull -q --rebase; git push -q; }

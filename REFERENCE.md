@@ -95,6 +95,7 @@ at the next wake and you will think you changed something when you did not.
 | `facts/` | what a wake cannot look up: numbers written down with their source and the time they were taken |
 | `lab/session.py` | writes a member's attended-session recipe from its own files |
 | `talk.sh` | the manual wake: ask one member one question from a terminal, or from a Goose window opened in this folder |
+| `lab/manual_check.py` | **the manual read as instructions**: builds a template the way a stranger receives it, makes a member with `tribe.py`, and asks the filesystem about every path the manual puts in backticks — there, written later (with the reason), in the project instead of the circle, or exempt by name. It cannot see whether a sentence is true; it sees the cheap half, which is the half that rots. `python3 tests.py -k ManualPoints` is the gate |
 | `lab/chat.py` + `chat.html` | a conversation page in a browser, if you want one: drop list, two boxes, reachable from a phone on the same wifi. Each message is a real wake. Not needed by anyone who can run Goose |
 | `tribe.py` | makes a new member's folder; validates names; refuses nonsense |
 | `.github/workflows/new-member.yml` | the same command as a form: name, seat, engine, and who you are. Adds a member without a terminal. The `person` field goes into the new member's identity as `"Lindsay Ridgeway is a close friend"` — left blank, the identity names "the person who keeps this circle" rather than inventing a name. |

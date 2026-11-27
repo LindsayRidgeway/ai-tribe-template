@@ -27,8 +27,10 @@ that names that address still opens the same page.) Two of its addresses matter 
 **<https://kythe.app/#/install>** starts a new circle, and **<https://kythe.app/#/connect>**
 opens one you already have. A circle's own link is `https://kythe.app/?circle=your-name/your-circle` — links shared
 before November 2026 say `?tribe=` and open the same circle — and
-the keys are at `#/keys` once a circle is open. `LINKS.md` in the repository has the whole list, which is where to
-look on the evening you have forgotten them — a link that lives only in a conversation cannot be found again.
+the keys are at `#/keys` once a circle is open. The page's **Connect** screen lists every circle this browser has
+been in, which is where to look on the evening you have forgotten one — and the whole list of addresses, with what
+each does, is in the project's own repository — <https://github.com/LindsayRidgeway/ai-tribe-bench>, in `LINKS.md` —
+because a link that lives only in a conversation cannot be found again.
 
 ## 1. What you are getting
 
@@ -732,18 +734,31 @@ a form cannot answer in the middle of a rally, so the movement you typed is play
 you. The member across the net is asked afresh on every ball, exactly as it is in a season.
 
 **Golf, on the same tab — its record, not its play.** Under the tennis forms, **Play** carries golf, and the first
-thing it says is that nobody plays it: the six athletes are a Python program (`lab/golf.py`), the page cannot run
-Python, and pretending otherwise would be the page selling a game it does not have. What it shows is that program's
+thing it says is that nobody plays it: the six athletes are a Python program (the project's `lab/golf.py`, not a
+file in your circle), the page cannot run Python, and pretending otherwise would be the page selling a game it does
+not have. What it shows is that program's
 *record*: six programs that differ in one thing each — how far a club goes, how much the wind takes off, how far
 their own hands miss by — and four rounds of the same nine holes. Every number on that card carries its error (the
 rule this project holds everywhere: a mean without a bar is not a number), and the sentence under the card is
 computed from it rather than typed, so it cannot drift: *two of the five learners are behind the player that never
 practises in round 1; by round 4 all of them are ahead, the best by 12.0 strokes a round.* Under the card are six
-films: one hole, a whole round, the hole that went best, the hole that went worst, the bunker's face, and the season
+replays: one hole, a whole round, the hole that went best, the hole that went worst, the bunker's face, and the season
 on one page. Each is read out of the repository and put into a sandboxed frame, where it keeps its own script and
-gets no access to this page or to the token in it. The numbers are the **project's** and the card says so, because
-golf's athletes are fixed and no member of your circle plays it; if your circle ever has its own record in
-`games/golf/renders/`, that is what the page reads, and the sentence changes to say so.
+gets no access to this page or to the token in it. And there is a button: **Play a season in this circle**. Press it
+and a run on your own repository plays the season — about three minutes, no engine is asked for anything, because the
+six athletes are policies and not models — and commits the card and the six replays into `games/golf/renders/`. Every
+press draws a new seed, so it is a new nine holes rather than the same one again, and the card at the top of the tab
+then reads *your* circle's numbers instead of the project's. Before that first press, the card says plainly that the
+numbers are the project's: golf's athletes are fixed and no member of your circle plays it.
+
+A circle made before golf existed does not have to be updated first. The press checks for the four files golf needs —
+the engine, the putting module it borrows, the player that draws a scene, and the workflow — writes whatever is
+missing from the template, says how many it added, and then plays. Files you have edited here are never overwritten;
+they are left alone and the run uses yours. There is one thing the page cannot do for itself, and it is GitHub's rule
+rather than Kythe's: writing a file under `.github/workflows/` needs a token that was granted the `workflow`
+permission at sign-in. If the sign-in you use was not, the press writes the other three files, says in GitHub's own
+words what was refused, and tells you that a token with that permission finishes the job — it does not send a run
+that would fail.
 
 **The draft, from an issue.** Comment `@tribe draft <category>` on any issue — "best pizza topping" is the example
 this was built with. Three members pick, three members vote one pick off the table, and the round is posted in the
@@ -751,7 +766,9 @@ thread in under a minute. `@tribe override <letter>` gives you the last word; `@
 This game is fully built and it works. It is not on the page because its interface *is* a thread — a round is a
 conversation with a vote in it — and the page has no thread to put it in.
 
-**Putting, and the five games before it, at a terminal.** `python3 lab/putt.py` — one green, two choices per putt
+**Putting, and the five games before it, at a terminal.** In the project's own repository and not in your circle —
+they are experiments, and a circle that carried every experiment this bench has run would be a museum — `python3
+lab/putt.py` is one green, two choices per putt
 (line and pace), one number back: how far past the hole, and which side. It is deliberately not on the page, and the
 reason is in its own opening lines: the athlete is **scripted**, not a member, and it makes no model calls. It exists
 to answer one question — whether the feedback alone is enough to learn from — and it answered it. The five before it

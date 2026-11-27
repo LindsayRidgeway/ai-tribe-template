@@ -69,6 +69,16 @@ CONTENT_PREFIXES = ("wake/members/", "soil/", "plates/", "issues/", "letters/", 
                     "docs/", "sport/", "experiments/", "lab/fixtures/")
 CONTENT_FILES = ("members.json", "README.md", ".tribe-beacon", ".gitignore")
 
+# One file under `games/` is machinery and not record: the player that draws a scene (`replay3d.html`, 30 KB of
+# WebGL that `lab/golf.py --render` reads and bakes a season into). Everything else beside it is the circle's own
+# seasons and must never be replaced. Named rather than a `games/golf/` prefix, because a prefix would say that
+# anything golf ever writes there is ours to overwrite — and a circle that pressed Play would find its own season
+# replaced by an example.
+# Pickleball's player is machinery for the same reason and by the same rule (2026-11-26): `lab/pickleball.py
+# --page` bakes a game into it, so a circle that pressed Play gets a film only if the player ships — and everything
+# else in `games/pickleball/` is that circle's own records.
+MACHINERY_FILES = ("games/golf/replay3d.html", "games/pickleball/replay3d.html")
+
 
 def is_machinery(rel: str) -> bool:
     """True for a file the template may replace, False for anything a person or a member owns."""
@@ -76,7 +86,7 @@ def is_machinery(rel: str) -> bool:
         return False
     if any(rel.startswith(p) for p in CONTENT_PREFIXES):
         return False
-    if rel in ROOT_DOCS:
+    if rel in ROOT_DOCS or rel in MACHINERY_FILES:
         return True
     if any(rel.startswith(p) for p in MACHINERY_PREFIXES):
         return True
